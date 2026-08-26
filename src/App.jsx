@@ -364,59 +364,66 @@ function Dashboard({ theme }) {
     appointments: general?.appointments || 0,
     cpa: general?.cpa ?? null,
   }
-  const ranking = currencyRows
+  const cpaRanking = currencyRows
     .filter((row) => row.seller_id && !row.currency_conflict)
     .sort((first, second) => {
       if (first.cpa === null) return 1
       if (second.cpa === null) return -1
       return first.cpa - second.cpa
     })
-  const chartRows = ranking.filter((row) => row.cpa !== null)
-  const bestSeller = chartRows[0]
+    .filter((row) => row.cpa !== null)
+  const appointmentRanking = currencyRows
+    .filter((row) => row.seller_id && row.appointments > 0)
+    .sort((first, second) => second.appointments - first.appointments
+      || first.seller_name.localeCompare(second.seller_name, 'pt-BR'))
+  const bestSeller = cpaRanking[0]
   const unmappedSpend = currencyRows
-    .filter((row) => row.mapping_status !== 'matched')
+    .filter((row) => row.row_type === 'unmatched')
     .reduce((total, row) => total + row.spend, 0)
-  const conflicts = currencyRows.filter((row) => row.currency_conflict).length
 
-  const chartData = {
-    labels: chartRows.map((row) => row.seller_name.split(' ')[0]),
+  const appointmentChartData = {
+    labels: appointmentRanking.map((row) => row.seller_name.split(' ')[0]),
     datasets: [{
-      label: `CPA em ${currency}`,
-      data: chartRows.map((row) => row.cpa),
-      backgroundColor: chartRows.map((_, index) =>
-        index === 0 ? '#ff7a1a' : `rgba(255, 122, 26, ${Math.max(.28, .72 - index * .08)})`
+      label: 'Agendamentos',
+      data: appointmentRanking.map((row) => row.appointments),
+      backgroundColor: appointmentRanking.map((_, index) =>
+        index === 0 ? '#ff7a1a' : `rgba(255, 122, 26, ${Math.max(.3, .76 - index * .08)})`
       ),
       borderColor: '#ff7a1a',
       borderWidth: 1,
-      borderRadius: 7,
-      barThickness: 24,
+      borderRadius: 9,
+      borderSkipped: false,
+      maxBarThickness: 52,
     }],
   }
-  const chartOptions = {
-    indexAxis: 'y',
+  const appointmentChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: (context) => ` CPA: ${money(context.raw, currency)}`,
+          label: (context) => ` ${context.raw} ${context.raw === 1 ? 'agendamento' : 'agendamentos'}`,
           afterLabel: (context) => {
-            const row = chartRows[context.dataIndex]
-            return [`Investimento: ${money(row.spend, currency)}`, `Agendamentos: ${row.appointments}`]
+            const row = appointmentRanking[context.dataIndex]
+            return row.cpa === null ? '' : `CPA: ${money(row.cpa, currency)}`
           },
         },
       },
     },
     scales: {
       x: {
-        beginAtZero: true,
-        grid: { color: theme === 'dark' ? 'rgba(255,255,255,.07)' : 'rgba(24,20,17,.08)' },
-        ticks: { color: theme === 'dark' ? '#aaa19a' : '#746c66' },
-      },
-      y: {
         grid: { display: false },
         ticks: { color: theme === 'dark' ? '#fbfaf8' : '#181411', font: { weight: 600 } },
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: theme === 'dark' ? 'rgba(255,255,255,.07)' : 'rgba(24,20,17,.08)' },
+        ticks: {
+          color: theme === 'dark' ? '#aaa19a' : '#746c66',
+          precision: 0,
+          stepSize: 1,
+        },
       },
     },
   }
@@ -471,24 +478,45 @@ function Dashboard({ theme }) {
         </article>
       </div>
 
-      {(unmappedSpend > 0 || conflicts > 0) && (
+      {unmappedSpend > 0 && (
         <div className="dashboard-alert"><AlertTriangle size={18} />
-          {unmappedSpend > 0 && `${money(unmappedSpend, currency)} ainda sem vendedor. `}
-          {conflicts > 0 && `${conflicts} vendedor(es) com investimento em mais de uma moeda.`}
+          {money(unmappedSpend, currency)} ainda sem vendedor.
         </div>
       )}
 
-      <article className="ranking-card">
-        <div className="ranking-header">
-          <div><span>Eficiência por vendedor</span><h2>Ranking de menor CPA</h2></div>
-          <span className="currency-reference">Valores convertidos em BRL</span>
-        </div>
-        <div className="chart-area">
-          {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando métricas...</div>
-            : chartRows.length > 0 ? <Bar data={chartData} options={chartOptions} />
-              : <div className="dashboard-empty"><TrendingDown size={28} /><strong>Sem dados para o período</strong><span>O ranking aparecerá após a primeira sincronização da Meta.</span></div>}
-        </div>
-      </article>
+      <div className="analytics-grid">
+        <article className="performance-panel cpa-ranking-panel">
+          <div className="ranking-header">
+            <div><span>Eficiência por vendedor</span><h2>Ranking de menor CPA</h2></div>
+            <span className="currency-reference">BRL</span>
+          </div>
+          <div className="cpa-ranking-list">
+            {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando métricas...</div>
+              : cpaRanking.length > 0 ? cpaRanking.map((row, index) => (
+                <div className={`cpa-rank-card${index === 0 ? ' winner' : ''}`} key={row.seller_id}>
+                  <span className="rank-position">{index + 1}</span>
+                  <div className="rank-seller">
+                    <strong>{row.seller_name}</strong>
+                    <small>{row.appointments} {row.appointments === 1 ? 'agendamento' : 'agendamentos'} · {money(row.spend, currency)} investidos</small>
+                  </div>
+                  <div className="rank-cpa"><small>CPA</small><strong>{money(row.cpa, currency)}</strong></div>
+                </div>
+              )) : <div className="dashboard-empty"><TrendingDown size={28} /><strong>Sem CPA no período</strong><span>O ranking aparecerá quando houver investimento e agendamentos.</span></div>}
+          </div>
+        </article>
+
+        <article className="performance-panel appointment-panel">
+          <div className="ranking-header">
+            <div><span>Volume por vendedor</span><h2>Ranking de agendamentos</h2></div>
+            <span className="currency-reference">Não cancelados</span>
+          </div>
+          <div className="appointment-chart-area">
+            {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando métricas...</div>
+              : appointmentRanking.length > 0 ? <Bar data={appointmentChartData} options={appointmentChartOptions} />
+                : <div className="dashboard-empty"><Users size={28} /><strong>Sem agendamentos no período</strong><span>O gráfico será preenchido quando houver pedidos não cancelados.</span></div>}
+          </div>
+        </article>
+      </div>
     </section>
   )
 }
