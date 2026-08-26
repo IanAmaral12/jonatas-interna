@@ -29,6 +29,8 @@ npm run dev
 - Encerramento de sessão
 - Mensagens de erro em português
 - Layout responsivo e acessível
+- Área autenticada com sidebar e rota inicial de Dashboard
+- Temas claro e escuro com preferência persistida no navegador
 
 ## Banco de dados
 

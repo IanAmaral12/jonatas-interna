@@ -2,15 +2,17 @@ import { useEffect, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
-  Check,
   Eye,
   EyeOff,
+  LayoutDashboard,
   LoaderCircle,
   LockKeyhole,
   LogOut,
   Mail,
+  Moon,
   ShieldCheck,
   Sparkles,
+  Sun,
 } from 'lucide-react'
 import { supabase, supabaseConfigError } from './lib/supabase'
 import './App.css'
@@ -68,38 +70,43 @@ function PasswordField({ id, label, value, onChange, autoComplete, placeholder =
   )
 }
 
-function AuthenticatedView({ session, onSignOut, loading }) {
-  const displayName = session.user.user_metadata?.name || session.user.email?.split('@')[0]
-
+function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
   return (
-    <main className="success-page">
-      <div className="success-glow" />
-      <header className="success-header">
-        <a className="brand dark-brand" href="/" aria-label="Nutra X1 - início">
+    <main className="dashboard-shell">
+      <aside className="app-sidebar">
+        <a className="brand dark-brand sidebar-brand" href="#dashboard" aria-label="Nutra X1 - dashboard">
           <BrandMark />
           <span>Nutra X1</span>
         </a>
-        <button className="signout-button" type="button" onClick={onSignOut} disabled={loading}>
-          <LogOut size={17} />
-          Sair
-        </button>
-      </header>
-      <section className="success-card">
-        <div className="success-icon"><Check size={31} strokeWidth={2.5} /></div>
-        <p className="eyebrow">Acesso liberado</p>
-        <h1>Que bom ter você aqui, {displayName}!</h1>
-        <p>Sua autenticação com o Supabase foi concluída e a sessão está ativa.</p>
-        <div className="user-summary">
-          <div className="avatar">{displayName?.charAt(0).toUpperCase()}</div>
-          <div>
-            <strong>{displayName}</strong>
-            <span>{session.user.email}</span>
-          </div>
-          <span className="status"><i /> Ativo</span>
+
+        <nav className="sidebar-nav" aria-label="Navegação principal">
+          <a className="sidebar-nav-item active" href="#dashboard" aria-current="page">
+            <LayoutDashboard size={19} />
+            <span>Dashboard</span>
+          </a>
+        </nav>
+
+        <div className="sidebar-controls">
+          <button className="sidebar-control" type="button" onClick={onToggleTheme}>
+            {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
+            <span>{theme === 'dark' ? 'Modo claro' : 'Modo escuro'}</span>
+          </button>
+          <button className="sidebar-control" type="button" onClick={onSignOut} disabled={loading}>
+            <LogOut size={19} />
+            <span>Sair</span>
+          </button>
         </div>
-      </section>
+      </aside>
+
+      <section id="dashboard" className="dashboard-content" aria-label="Dashboard" />
     </main>
   )
+}
+
+function getInitialTheme() {
+  const storedTheme = window.localStorage.getItem('nutra-x1-theme')
+  if (storedTheme === 'light' || storedTheme === 'dark') return storedTheme
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 }
 
 function App() {
@@ -109,6 +116,12 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [initializing, setInitializing] = useState(Boolean(supabase))
   const [message, setMessage] = useState(null)
+  const [theme, setTheme] = useState(getInitialTheme)
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    window.localStorage.setItem('nutra-x1-theme', theme)
+  }, [theme])
 
   useEffect(() => {
     if (!supabase) {
@@ -201,12 +214,23 @@ function App() {
     setLoading(false)
   }
 
+  const toggleTheme = () => {
+    setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark')
+  }
+
   if (initializing) {
     return <div className="page-loader"><LoaderCircle className="spin" size={30} /><span>Carregando...</span></div>
   }
 
   if (session && mode !== 'update-password') {
-    return <AuthenticatedView session={session} onSignOut={handleSignOut} loading={loading} />
+    return (
+      <AuthenticatedView
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onSignOut={handleSignOut}
+        loading={loading}
+      />
+    )
   }
 
   const isLogin = mode === 'login'
@@ -259,6 +283,15 @@ function App() {
       </section>
 
       <section className="form-panel">
+        <button
+          className="auth-theme-toggle"
+          type="button"
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Ativar modo claro' : 'Ativar modo escuro'}
+          title={theme === 'dark' ? 'Modo claro' : 'Modo escuro'}
+        >
+          {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
+        </button>
         <div className="mobile-brand">
           <a className="brand dark-brand" href="/" aria-label="Nutra X1 - início"><BrandMark /><span>Nutra X1</span></a>
         </div>
