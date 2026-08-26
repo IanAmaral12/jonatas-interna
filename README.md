@@ -79,14 +79,16 @@ O campo `orders.data` é um `timestamptz`. Datas sem offset explícito enviadas 
 
 ### Meta Ads e CPA
 
-A Edge Function privada `meta-ads-sync` usa a Graph API v26 para descobrir as contas acessíveis aos dois tokens, consultar Insights no nível de campanha e percorrer toda a paginação. A coleta usa `hourly_stats_aggregated_by_advertiser_time_zone`; cada retrato diário é substituído atomicamente, sem calcular diferenças entre totais acumulados.
+A Edge Function privada `meta-ads-sync` usa a Graph API v26 para consultar as sete contas configuradas nos dois tokens, buscar Insights no nível de campanha e percorrer toda a paginação. A coleta usa `hourly_stats_aggregated_by_advertiser_time_zone`; cada retrato diário preenchido é substituído atomicamente, sem calcular diferenças entre totais acumulados. Respostas com `data: []` não alteram os dados existentes.
 
-O banco preserva moeda, fuso da conta, hora local da Meta e o instante equivalente em UTC. Campanhas são relacionadas aos vendedores por aliases normalizados e o dashboard calcula o CPA como investimento dividido por pedidos não cancelados no mesmo período. BRL e USD permanecem separados.
+O banco preserva moeda, fuso da conta, hora local da Meta e o instante equivalente em UTC. Campanhas são relacionadas aos vendedores por aliases normalizados e o dashboard calcula o CPA como investimento dividido por pedidos não cancelados no mesmo período.
 
-Para ativar a integração, preencha `supabase/.env.meta.local` com `META_ACCESS_TOKEN_1` e `META_ACCESS_TOKEN_2` e execute:
+Custos originais ficam registrados em `spend`, enquanto `spend_usd` e `spend_brl` preservam os dois valores convertidos. A taxa USD/BRL é obtida pela API pública Frankfurter v2 com o provedor `BCB` (PTAX de fechamento), e sua data fica gravada junto ao insight. O frontend sempre usa `spend_brl`.
+
+Para ativar a integração, cadastre `META_ACCESS_TOKEN_1` e `META_ACCESS_TOKEN_2` nos secrets do Supabase e execute:
 
 ```powershell
 .\scripts\configure-meta-ads.ps1
 ```
 
-O script cadastra os secrets, publica a função, executa a primeira sincronização e agenda novas coletas a cada 10 minutos. Tokens nunca devem ser adicionados ao Git ou expostos em variáveis `VITE_*`.
+O script publica a função, executa a primeira sincronização e agenda novas coletas a cada 10 minutos. Tokens nunca devem ser adicionados ao Git ou expostos em variáveis `VITE_*`.

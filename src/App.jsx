@@ -106,9 +106,9 @@ function Dashboard({ theme }) {
   const [filters, setFilters] = useState({ start: today, end: today })
   const [appliedFilters, setAppliedFilters] = useState({ start: today, end: today })
   const [rows, setRows] = useState([])
-  const [currency, setCurrency] = useState('BRL')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const currency = 'BRL'
 
   useEffect(() => {
     let active = true
@@ -141,17 +141,12 @@ function Dashboard({ theme }) {
   }, [appliedFilters])
 
   const currencyRows = rows.filter((row) => row.currency === currency)
-  const summaries = ['BRL', 'USD'].map((summaryCurrency) => {
-    const general = rows.find((row) => row.currency === summaryCurrency && row.row_type === 'general')
-    const spend = general?.spend || 0
-    const appointments = general?.appointments || 0
-    return {
-      currency: summaryCurrency,
-      spend,
-      appointments,
-      cpa: general?.cpa ?? null,
-    }
-  })
+  const general = rows.find((row) => row.currency === currency && row.row_type === 'general')
+  const summary = {
+    spend: general?.spend || 0,
+    appointments: general?.appointments || 0,
+    cpa: general?.cpa ?? null,
+  }
   const ranking = currencyRows
     .filter((row) => row.seller_id && !row.currency_conflict)
     .sort((first, second) => {
@@ -160,6 +155,7 @@ function Dashboard({ theme }) {
       return first.cpa - second.cpa
     })
   const chartRows = ranking.filter((row) => row.cpa !== null)
+  const bestSeller = chartRows[0]
   const unmappedSpend = currencyRows
     .filter((row) => row.mapping_status !== 'matched')
     .reduce((total, row) => total + row.spend, 0)
@@ -238,25 +234,29 @@ function Dashboard({ theme }) {
       {error && <div className="dashboard-alert error"><AlertTriangle size={18} />{error}</div>}
 
       <div className="metric-grid">
-        {summaries.map((summary) => (
-          <article className="metric-card" key={summary.currency}>
-            <div className="metric-icon"><TrendingDown size={20} /></div>
-            <div className="metric-label"><span>CPA geral</span><b>{summary.currency}</b></div>
-            <strong>{summary.cpa === null ? '—' : money(summary.cpa, summary.currency)}</strong>
-            <small>{summary.appointments} agendamentos</small>
-          </article>
-        ))}
+        <article className="metric-card">
+          <div className="metric-icon"><TrendingDown size={20} /></div>
+          <div className="metric-label"><span>CPA geral</span><b>BRL</b></div>
+          <strong>{summary.cpa === null ? '—' : money(summary.cpa, currency)}</strong>
+          <small>{summary.appointments} agendamentos</small>
+        </article>
         <article className="metric-card">
           <div className="metric-icon"><CircleDollarSign size={20} /></div>
           <div className="metric-label"><span>Investimento</span><b>{currency}</b></div>
-          <strong>{money(summaries.find((item) => item.currency === currency)?.spend, currency)}</strong>
+          <strong>{money(summary.spend, currency)}</strong>
           <small>No período selecionado</small>
         </article>
         <article className="metric-card">
           <div className="metric-icon"><Users size={20} /></div>
           <div className="metric-label"><span>Agendamentos</span><b>{currency}</b></div>
-          <strong>{summaries.find((item) => item.currency === currency)?.appointments || 0}</strong>
-          <small>Pedidos válidos atribuídos</small>
+          <strong>{summary.appointments}</strong>
+          <small>Todos os pedidos não cancelados</small>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon"><Sparkles size={20} /></div>
+          <div className="metric-label"><span>Melhor CPA</span><b>BRL</b></div>
+          <strong>{bestSeller ? money(bestSeller.cpa, currency) : '—'}</strong>
+          <small>{bestSeller?.seller_name || 'Aguardando dados'}</small>
         </article>
       </div>
 
@@ -270,9 +270,7 @@ function Dashboard({ theme }) {
       <article className="ranking-card">
         <div className="ranking-header">
           <div><span>Eficiência por vendedor</span><h2>Ranking de menor CPA</h2></div>
-          <div className="currency-tabs" aria-label="Moeda do ranking">
-            {['BRL', 'USD'].map((item) => <button className={currency === item ? 'active' : ''} type="button" key={item} onClick={() => setCurrency(item)}>{item}</button>)}
-          </div>
+          <span className="currency-reference">Valores convertidos em BRL</span>
         </div>
         <div className="chart-area">
           {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando métricas...</div>

@@ -15,7 +15,7 @@ Get-Content -LiteralPath $envFile | ForEach-Object {
   }
 }
 
-$requiredKeys = @('META_ADS_WORKER_SECRET', 'META_ACCESS_TOKEN_1', 'META_ACCESS_TOKEN_2')
+$requiredKeys = @('META_ADS_WORKER_SECRET')
 foreach ($key in $requiredKeys) {
   if (-not $settings.ContainsKey($key) -or [string]::IsNullOrWhiteSpace($settings[$key])) {
     throw "Preencha $key em supabase/.env.meta.local."
@@ -28,8 +28,19 @@ if ($settings['META_ADS_WORKER_SECRET'].Length -lt 32) {
 
 Push-Location $projectRoot
 try {
-  npx supabase secrets set --env-file $envFile --project-ref $projectRef
-  if ($LASTEXITCODE -ne 0) { throw 'Falha ao cadastrar os secrets no Supabase.' }
+  $hasLocalTokens = -not [string]::IsNullOrWhiteSpace($settings['META_ACCESS_TOKEN_1']) `
+    -and -not [string]::IsNullOrWhiteSpace($settings['META_ACCESS_TOKEN_2'])
+
+  if ($hasLocalTokens) {
+    npx supabase secrets set --env-file $envFile --project-ref $projectRef
+    if ($LASTEXITCODE -ne 0) { throw 'Falha ao cadastrar os secrets no Supabase.' }
+  } else {
+    $secretList = npx supabase secrets list --project-ref $projectRef | Out-String | ConvertFrom-Json
+    $secretNames = @($secretList.secrets | ForEach-Object { $_.name })
+    if ('META_ACCESS_TOKEN_1' -notin $secretNames -or 'META_ACCESS_TOKEN_2' -notin $secretNames) {
+      throw 'Preencha os dois tokens localmente ou cadastre-os antes nos secrets do Supabase.'
+    }
+  }
 
   npx supabase functions deploy meta-ads-sync --project-ref $projectRef
   if ($LASTEXITCODE -ne 0) { throw 'Falha ao publicar a função meta-ads-sync.' }

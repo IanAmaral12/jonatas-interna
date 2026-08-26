@@ -49,8 +49,32 @@ interface DiscoveredAccount {
   tokenSlot: TokenSlot;
 }
 
+interface AccountBinding {
+  accountId: string;
+  tokenSlot: 1 | 2;
+}
+
+interface ExchangeRate {
+  date: string;
+  base: "USD";
+  quote: "BRL";
+  rate: number;
+  source: "api" | "database";
+  rawPayload: JsonObject;
+}
+
 const GRAPH_VERSION = "v26.0";
 const GRAPH_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const EXCHANGE_RATE_URL = "https://api.frankfurter.dev/v2/rate/USD/BRL?providers=BCB";
+const ACCOUNT_BINDINGS: AccountBinding[] = [
+  { accountId: "1010965721683924", tokenSlot: 1 },
+  { accountId: "917116774558155", tokenSlot: 1 },
+  { accountId: "3653228731512122", tokenSlot: 2 },
+  { accountId: "1504340270635097", tokenSlot: 2 },
+  { accountId: "1161460945974128", tokenSlot: 2 },
+  { accountId: "1266025311173661", tokenSlot: 2 },
+  { accountId: "1392600858079467", tokenSlot: 2 },
+];
 const jsonHeaders = { "Content-Type": "application/json; charset=utf-8" };
 
 function jsonResponse(body: Record<string, unknown>, status = 200): Response {
@@ -132,22 +156,90 @@ async function fetchAllPages<T>(initialUrl: URL, token: string): Promise<T[]> {
   return results;
 }
 
-async function discoverAccounts(tokenSlot: TokenSlot): Promise<DiscoveredAccount[]> {
-  const url = new URL(`${GRAPH_URL}/me/adaccounts`);
+async function fetchMetaObject<T extends JsonObject>(url: URL, token: string): Promise<T> {
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const payload = await response.json() as T & MetaPage<never>;
+  if (!response.ok || payload.error) {
+    throw new Error(
+      `${payload.error?.message || `Erro HTTP ${response.status} na API da Meta.`} ` +
+        `(código ${payload.error?.code ?? response.status})`,
+    );
+  }
+  return payload;
+}
+
+async function loadConfiguredAccount(
+  binding: AccountBinding,
+  tokenSlots: TokenSlot[],
+): Promise<DiscoveredAccount> {
+  const tokenSlot = tokenSlots.find((item) => item.slot === binding.tokenSlot);
+  if (!tokenSlot) throw new Error(`Token ${binding.tokenSlot} não configurado.`);
+
+  const url = new URL(`${GRAPH_URL}/act_${binding.accountId}`);
   url.searchParams.set(
     "fields",
     "id,account_id,name,currency,timezone_name,timezone_offset_hours_utc,account_status",
   );
-  url.searchParams.set("limit", "100");
+  const account = await fetchMetaObject<MetaAdAccount & JsonObject>(url, tokenSlot.token);
+  return { account, tokenSlot };
+}
 
-  const accounts = await fetchAllPages<MetaAdAccount>(url, tokenSlot.token);
-  return accounts
-    .filter((account) => account.id && account.account_id && account.name)
-    .map((account) => ({ account, tokenSlot }));
+async function loadExchangeRate(supabase: SupabaseClient): Promise<ExchangeRate> {
+  try {
+    const response = await fetch(EXCHANGE_RATE_URL);
+    const payload = await response.json() as JsonObject;
+    const rate = numeric(payload.rate);
+    const date = typeof payload.date === "string" ? payload.date : "";
+    if (!response.ok || rate <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new Error("A resposta da cotação USD/BRL é inválida.");
+    }
+
+    const exchangeRate: ExchangeRate = {
+      date,
+      base: "USD",
+      quote: "BRL",
+      rate,
+      source: "api",
+      rawPayload: payload,
+    };
+    const { error } = await supabase.from("meta_exchange_rates").upsert({
+      rate_date: date,
+      base_currency: "USD",
+      quote_currency: "BRL",
+      rate,
+      provider: "BCB",
+      source: "Frankfurter v2",
+      fetched_at: new Date().toISOString(),
+      raw_payload: payload,
+    }, { onConflict: "rate_date" });
+    if (error) throw new Error(error.message);
+    return exchangeRate;
+  } catch (rateError) {
+    console.error(
+      "Falha ao consultar cotação; tentando último valor persistido:",
+      rateError instanceof Error ? rateError.message : rateError,
+    );
+    const { data, error } = await supabase
+      .from("meta_exchange_rates")
+      .select("rate_date,rate,raw_payload")
+      .order("rate_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data) throw new Error("Nenhuma cotação USD/BRL está disponível.");
+    return {
+      date: data.rate_date,
+      base: "USD",
+      quote: "BRL",
+      rate: Number(data.rate),
+      source: "database",
+      rawPayload: data.raw_payload as JsonObject,
+    };
+  }
 }
 
 async function fetchAccountInsights(
   discovered: DiscoveredAccount,
+  exchangeRate: ExchangeRate,
 ): Promise<{ metricDate: string; rows: JsonObject[] }> {
   const { account, tokenSlot } = discovered;
   const metricDate = dateInTimezone(new Date(), account.timezone_name);
@@ -182,12 +274,17 @@ async function fetchAccountInsights(
     const hourMatch = hourBucket?.match(/^(\d{2}):/);
     if (!insight.campaign_id || !insight.campaign_name || !hourBucket || !hourMatch) return [];
 
+    const spend = numeric(insight.spend);
     return [{
       campaign_id: insight.campaign_id,
       campaign_name: insight.campaign_name,
       hour_start: Number(hourMatch[1]),
       hour_bucket: hourBucket,
-      spend: numeric(insight.spend),
+      spend,
+      spend_usd: account.currency === "USD" ? spend : spend / exchangeRate.rate,
+      spend_brl: account.currency === "BRL" ? spend : spend * exchangeRate.rate,
+      exchange_rate_usd_brl: exchangeRate.rate,
+      exchange_rate_date: exchangeRate.date,
       impressions: Math.trunc(numeric(insight.impressions)),
       reach: Math.trunc(numeric(insight.reach)),
       clicks: Math.trunc(numeric(insight.clicks)),
@@ -279,23 +376,22 @@ Deno.serve(async (request) => {
   let rowsReceived = 0;
 
   try {
-    const discoveryResults = await Promise.allSettled(tokenSlots.map(discoverAccounts));
-    const accountMap = new Map<string, DiscoveredAccount>();
+    const exchangeRate = await loadExchangeRate(supabase);
+    const discoveryResults = await Promise.allSettled(
+      ACCOUNT_BINDINGS.map((binding) => loadConfiguredAccount(binding, tokenSlots)),
+    );
+    const accounts: DiscoveredAccount[] = [];
 
     discoveryResults.forEach((result, index) => {
       if (result.status === "rejected") {
         errors.push({
-          scope: `token_${tokenSlots[index].slot}`,
-          message: result.reason instanceof Error ? result.reason.message : "Falha na descoberta de contas.",
+          scope: `act_${ACCOUNT_BINDINGS[index].accountId}`,
+          message: result.reason instanceof Error ? result.reason.message : "Falha ao carregar a conta.",
         });
         return;
       }
-      for (const discovered of result.value) {
-        if (!accountMap.has(discovered.account.id)) accountMap.set(discovered.account.id, discovered);
-      }
+      accounts.push(result.value);
     });
-
-    const accounts = [...accountMap.values()];
     accountsDiscovered = accounts.length;
 
     for (const discovered of accounts) {
@@ -322,7 +418,11 @@ Deno.serve(async (request) => {
       }
 
       try {
-        const { metricDate, rows } = await fetchAccountInsights(discovered);
+        const { metricDate, rows } = await fetchAccountInsights(discovered, exchangeRate);
+        if (rows.length === 0) {
+          accountsSynced += 1;
+          continue;
+        }
         const { data: inserted, error: replaceError } = await supabase.rpc(
           "replace_meta_hourly_insights",
           {
@@ -358,6 +458,12 @@ Deno.serve(async (request) => {
     return jsonResponse({
       run_id: runId,
       graph_version: GRAPH_VERSION,
+      exchange_rate: {
+        date: exchangeRate.date,
+        usd_brl: exchangeRate.rate,
+        source: exchangeRate.source,
+        provider: "BCB",
+      },
       status,
       accounts_discovered: accountsDiscovered,
       accounts_synced: accountsSynced,
