@@ -38,13 +38,12 @@ A tabela utiliza Row Level Security sem políticas públicas por padrão. Integr
 
 ### Entrada de pedidos por webhook
 
-A Edge Function `orders-webhook` recebe objetos JSON via `POST` e os armazena na fila durável `orders_ingest`, baseada em PGMQ. Cada mensagem preserva o payload original e adiciona `request_id`, `received_at` e `source`.
+A Edge Function pública `orders-webhook` recebe objetos JSON via `POST` e os armazena na fila durável `orders_ingest`, baseada em PGMQ. Cada mensagem preserva o payload original e adiciona `request_id`, `received_at` e `source`.
 
-Configure o segredo antes do deploy:
+Faça o deploy sem verificação de JWT:
 
 ```bash
-npx supabase secrets set WEBHOOK_SECRET=SEU_SEGREDO_FORTE --project-ref biyzmqfpxeqkittmnxpu
 npx supabase functions deploy orders-webhook --project-ref biyzmqfpxeqkittmnxpu --no-verify-jwt --use-api
 ```
 
-Envie o segredo no cabeçalho `x-webhook-secret`. Os cabeçalhos opcionais `x-webhook-id` e `x-webhook-source` permitem identificar a entrega e a plataforma de origem.
+O endpoint não exige autenticação. Os cabeçalhos opcionais `x-webhook-id` e `x-webhook-source` permitem identificar a entrega e a plataforma de origem. Por segurança operacional, somente requisições `POST` com objetos JSON de até 1 MB são aceitas.

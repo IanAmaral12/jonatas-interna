@@ -15,21 +15,6 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function safeEqual(received: string, expected: string): boolean {
-  const encoder = new TextEncoder();
-  const receivedBytes = encoder.encode(received);
-  const expectedBytes = encoder.encode(expected);
-
-  if (receivedBytes.length !== expectedBytes.length) return false;
-
-  let difference = 0;
-  for (let index = 0; index < receivedBytes.length; index += 1) {
-    difference |= receivedBytes[index] ^ expectedBytes[index];
-  }
-
-  return difference === 0;
-}
-
 Deno.serve(async (request) => {
   if (request.method !== "POST") {
     return jsonResponse({ error: "Método não permitido." }, 405);
@@ -37,16 +22,10 @@ Deno.serve(async (request) => {
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const webhookSecret = Deno.env.get("WEBHOOK_SECRET");
 
-  if (!supabaseUrl || !serviceRoleKey || !webhookSecret) {
+  if (!supabaseUrl || !serviceRoleKey) {
     console.error("Variáveis obrigatórias da função não foram configuradas.");
     return jsonResponse({ error: "Integração indisponível." }, 500);
-  }
-
-  const receivedSecret = request.headers.get("x-webhook-secret") ?? "";
-  if (!safeEqual(receivedSecret, webhookSecret)) {
-    return jsonResponse({ error: "Não autorizado." }, 401);
   }
 
   const declaredLength = Number(request.headers.get("content-length") ?? 0);
