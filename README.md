@@ -49,3 +49,27 @@ npx supabase functions deploy orders-webhook --project-ref biyzmqfpxeqkittmnxpu 
 ```
 
 O endpoint não exige autenticação. Os cabeçalhos opcionais `x-webhook-id` e `x-webhook-source` permitem identificar a entrega e a plataforma de origem. Por segurança operacional, somente requisições `POST` com objetos JSON de até 1 MB são aceitas.
+
+### Worker de pedidos
+
+A Edge Function privada `orders-worker` lê até 100 mensagens da fila por execução. Eventos `order_created` inserem uma nova linha usando `skaletracking.id_venda` como chave; os demais eventos apenas atualizam um pedido existente. Reenvios de criação são tratados de forma idempotente.
+
+O valor do pedido é normalizado de centavos para reais a partir de `product.price`. Mensagens inválidas ou eventos de atualização sem uma criação anterior são preservados na fila `orders_ingest_dlq`. Mensagens processadas com sucesso são arquivadas pelo PGMQ.
+
+O Supabase Cron invoca o worker automaticamente uma vez por minuto. Um lease no Postgres impede execuções concorrentes, e o segredo de invocação fica criptografado no Supabase Vault.
+
+| Coluna em `orders` | Campo do payload |
+| --- | --- |
+| `id` | `skaletracking.id_venda` |
+| `atendente` | `skaletracking.usuario_responsavel` |
+| `data` | `started_at_data` ou `started_at` |
+| `nome_cliente` | `customer.name` |
+| `contato_cliente` | `customer.phone` ou `customer.email` |
+| `valor` | `product.price / 100` |
+| `observacao` | `skaletracking.observacao` |
+| `tratamento` | `product.name` |
+| `documento` | `customer.doc` |
+| `plataforma` | `skaletracking.plataforma` |
+| `data_pagamento` | `transaction.paid_at_data` ou `transaction.paid_at` |
+| `codigo_rastreio` | `shipping.tracking_code` |
+| `status_rastreio` | `skaletracking.status_entrega` |
