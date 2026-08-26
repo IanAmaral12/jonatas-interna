@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
   CalendarDays,
+  Check,
+  ChevronDown,
   CircleDollarSign,
   Eye,
   EyeOff,
@@ -19,6 +21,9 @@ import {
   TrendingDown,
   Users,
 } from 'lucide-react'
+import { DayPicker } from '@daypicker/react'
+import { ptBR } from '@daypicker/react/locale'
+import '@daypicker/react/style.css'
 import {
   BarElement,
   CategoryScale,
@@ -91,6 +96,218 @@ function localDateValue(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function dateFromValue(value) {
+  if (!value) return undefined
+  const [year, month, day] = value.split('-').map(Number)
+  return new Date(year, month - 1, day, 12)
+}
+
+function moveDate(date, days) {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+function getDatePresets(reference = new Date()) {
+  const today = dateFromValue(localDateValue(reference))
+  const yesterday = moveDate(today, -1)
+  const weekStart = moveDate(today, -today.getDay())
+  const weekEnd = moveDate(weekStart, 6)
+  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1, 12)
+  const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 12)
+  const previousMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1, 12)
+  const previousMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0, 12)
+
+  return [
+    { id: 'today', label: 'Hoje', start: today, end: today },
+    { id: 'yesterday', label: 'Ontem', start: yesterday, end: yesterday },
+    { id: 'this-week', label: 'Esta semana', detail: 'Domingo a sábado', start: weekStart, end: weekEnd },
+    { id: 'this-month', label: 'Este mês', start: monthStart, end: monthEnd },
+    { id: 'last-month', label: 'Mês passado', start: previousMonthStart, end: previousMonthEnd },
+  ]
+}
+
+const shortDateFormatter = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: 'short',
+  year: 'numeric',
+})
+
+function periodLabel(filters) {
+  const start = dateFromValue(filters.start)
+  const end = dateFromValue(filters.end)
+  if (!start) return 'Selecione um período'
+  if (!end) return `${shortDateFormatter.format(start)} — selecione o fim`
+  if (filters.start === filters.end) return shortDateFormatter.format(start)
+  return `${shortDateFormatter.format(start)} — ${shortDateFormatter.format(end)}`
+}
+
+function selectedDays(filters) {
+  const start = dateFromValue(filters.start)
+  const end = dateFromValue(filters.end)
+  if (!start || !end) return 0
+  const startUtc = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate())
+  const endUtc = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate())
+  return Math.round((endUtc - startUtc) / 86400000) + 1
+}
+
+function DateRangeFilter({ filters, appliedFilters, setFilters, onApply, loading }) {
+  const containerRef = useRef(null)
+  const [open, setOpen] = useState(false)
+  const [month, setMonth] = useState(() => dateFromValue(filters.start))
+  const [compact, setCompact] = useState(() => window.innerWidth <= 1050)
+  const presets = getDatePresets()
+  const range = filters.start ? {
+    from: dateFromValue(filters.start),
+    to: dateFromValue(filters.end),
+  } : undefined
+  const totalDays = selectedDays(filters)
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 1050px)')
+    const updateLayout = (event) => setCompact(event.matches)
+    media.addEventListener('change', updateLayout)
+    return () => media.removeEventListener('change', updateLayout)
+  }, [])
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const closeOnOutsideClick = (event) => {
+      if (!containerRef.current?.contains(event.target)) {
+        setFilters({ ...appliedFilters })
+        setOpen(false)
+      }
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') {
+        setFilters({ ...appliedFilters })
+        setOpen(false)
+      }
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsideClick)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [appliedFilters, open, setFilters])
+
+  const toggleCalendar = () => {
+    if (open) {
+      setFilters({ ...appliedFilters })
+      setOpen(false)
+    } else {
+      setMonth(dateFromValue(appliedFilters.start) || new Date())
+      setOpen(true)
+    }
+  }
+
+  const selectRange = (nextRange) => {
+    if (!nextRange?.from) return
+    setFilters({
+      start: localDateValue(nextRange.from),
+      end: nextRange.to ? localDateValue(nextRange.to) : '',
+    })
+  }
+
+  const selectPreset = (preset) => {
+    setFilters({ start: localDateValue(preset.start), end: localDateValue(preset.end) })
+    setMonth(preset.start)
+  }
+
+  const cancelSelection = () => {
+    setFilters({ ...appliedFilters })
+    setOpen(false)
+  }
+
+  const applySelection = (event) => {
+    event.preventDefault()
+    if (!filters.start || !filters.end) return
+    onApply()
+    setOpen(false)
+  }
+
+  return (
+    <div className="date-filter" ref={containerRef}>
+      <button
+        className={`period-trigger${open ? ' open' : ''}`}
+        type="button"
+        onClick={toggleCalendar}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+      >
+        <span className="period-trigger-icon"><CalendarDays size={19} /></span>
+        <span className="period-trigger-copy">
+          <small>Período</small>
+          <strong>{periodLabel(filters)}</strong>
+        </span>
+        <ChevronDown className="period-trigger-chevron" size={17} />
+      </button>
+
+      {open && (
+        <form className="date-popover" onSubmit={applySelection} role="dialog" aria-label="Selecionar período">
+          <div className="date-popover-heading">
+            <div>
+              <span>Filtrar por período</span>
+              <strong>{filters.end ? `${totalDays} ${totalDays === 1 ? 'dia selecionado' : 'dias selecionados'}` : 'Agora escolha a data final'}</strong>
+            </div>
+            <span className="selection-dot" aria-hidden="true" />
+          </div>
+
+          <div className="date-popover-body">
+            <div className="date-presets" role="group" aria-label="Períodos rápidos">
+              <span className="date-presets-label">Atalhos</span>
+              {presets.map((preset) => {
+                const active = filters.start === localDateValue(preset.start)
+                  && filters.end === localDateValue(preset.end)
+                return (
+                  <button
+                    className={`date-preset${active ? ' active' : ''}`}
+                    type="button"
+                    key={preset.id}
+                    onClick={() => selectPreset(preset)}
+                  >
+                    <span><strong>{preset.label}</strong>{preset.detail && <small>{preset.detail}</small>}</span>
+                    {active && <Check size={15} />}
+                  </button>
+                )
+              })}
+            </div>
+
+            <DayPicker
+              animate
+              fixedWeeks
+              locale={ptBR}
+              mode="range"
+              month={month}
+              navLayout="around"
+              numberOfMonths={compact ? 1 : 2}
+              onMonthChange={setMonth}
+              onSelect={selectRange}
+              resetOnSelect
+              selected={range}
+              showOutsideDays
+              weekStartsOn={0}
+            />
+          </div>
+
+          <div className="date-popover-footer">
+            <span><CalendarDays size={15} />{periodLabel(filters)}</span>
+            <div>
+              <button className="date-cancel" type="button" onClick={cancelSelection}>Cancelar</button>
+              <button className="date-apply" type="submit" disabled={loading || !filters.start || !filters.end}>
+                {loading ? <LoaderCircle className="spin" size={17} /> : 'Filtrar'}
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+    </div>
+  )
 }
 
 function money(value, currency) {
@@ -204,8 +421,7 @@ function Dashboard({ theme }) {
     },
   }
 
-  const applyFilters = (event) => {
-    event.preventDefault()
+  const applyFilters = () => {
     if (filters.start <= filters.end) setAppliedFilters({ ...filters })
   }
 
@@ -217,18 +433,13 @@ function Dashboard({ theme }) {
           <h1>Dashboard de CPA</h1>
           <p>Custo por agendamento com pedidos cancelados desconsiderados.</p>
         </div>
-        <form className="period-filter" onSubmit={applyFilters}>
-          <CalendarDays size={18} />
-          <label>
-            <span>De</span>
-            <input type="date" value={filters.start} max={filters.end} onChange={(event) => setFilters((current) => ({ ...current, start: event.target.value }))} />
-          </label>
-          <label>
-            <span>Até</span>
-            <input type="date" value={filters.end} min={filters.start} onChange={(event) => setFilters((current) => ({ ...current, end: event.target.value }))} />
-          </label>
-          <button type="submit" disabled={loading}>{loading ? <LoaderCircle className="spin" size={17} /> : 'Aplicar'}</button>
-        </form>
+        <DateRangeFilter
+          filters={filters}
+          appliedFilters={appliedFilters}
+          setFilters={setFilters}
+          onApply={applyFilters}
+          loading={loading}
+        />
       </header>
 
       {error && <div className="dashboard-alert error"><AlertTriangle size={18} />{error}</div>}

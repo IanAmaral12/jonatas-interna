@@ -83,12 +83,53 @@ form { display: grid; gap: 18px; }
 .dashboard-eyebrow { color: var(--orange-dark); font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
 .dashboard-header h1 { margin: 7px 0 7px; color: var(--ink); font: 750 clamp(29px, 3vw, 40px)/1.1 'Manrope', sans-serif; letter-spacing: -1.7px; }
 .dashboard-header p { margin: 0; color: var(--muted); font-size: 14px; }
-.period-filter { min-height: 62px; display: flex; align-items: center; gap: 13px; padding: 8px 9px 8px 15px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 9px 30px rgba(27, 18, 12, .04); }
-.period-filter > svg { flex: 0 0 auto; color: var(--orange-dark); }
-.period-filter label { display: grid; gap: 3px; }
-.period-filter label span { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
-.period-filter input { width: 124px; padding: 0; color: var(--ink); border: 0; outline: 0; background: transparent; font-size: 12px; font-weight: 650; }
-.period-filter button { min-width: 77px; height: 43px; display: grid; place-items: center; padding: 0 15px; color: #211005; border: 0; border-radius: 10px; background: var(--orange); font-size: 12px; font-weight: 800; }
+.date-filter { position: relative; z-index: 20; flex: 0 0 auto; }
+.period-trigger { min-width: 304px; min-height: 62px; display: flex; align-items: center; gap: 12px; padding: 8px 13px 8px 9px; color: var(--ink); border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 9px 30px rgba(27, 18, 12, .04); text-align: left; transition: border-color .2s, box-shadow .2s, transform .2s; }
+.period-trigger:hover, .period-trigger.open { border-color: rgba(255,122,26,.6); box-shadow: 0 12px 34px rgba(27,18,12,.08), 0 0 0 3px var(--orange-soft); }
+.period-trigger:active { transform: translateY(1px); }
+.period-trigger-icon { width: 43px; height: 43px; display: grid; flex: 0 0 auto; place-items: center; color: var(--orange-dark); border: 1px solid rgba(255,122,26,.2); border-radius: 11px; background: var(--orange-soft); }
+.period-trigger-copy { min-width: 0; display: grid; flex: 1; gap: 3px; }
+.period-trigger-copy small { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
+.period-trigger-copy strong { overflow: hidden; color: var(--ink); font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.period-trigger-chevron { flex: 0 0 auto; color: var(--muted); transition: transform .2s; }
+.period-trigger.open .period-trigger-chevron { transform: rotate(180deg); }
+.date-popover { position: absolute; z-index: 50; top: calc(100% + 11px); right: 0; width: max-content; max-width: calc(100vw - 300px); display: block; overflow: hidden; color: var(--ink); border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: 0 24px 70px rgba(20,13,8,.2); animation: calendar-in .18s ease-out; }
+@keyframes calendar-in { from { opacity: 0; transform: translateY(-5px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.date-popover-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 20px 15px; border-bottom: 1px solid var(--border); }
+.date-popover-heading > div { display: grid; gap: 3px; }
+.date-popover-heading span { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
+.date-popover-heading strong { color: var(--ink); font-size: 13px; }
+.selection-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--orange); box-shadow: 0 0 0 5px var(--orange-soft); }
+.date-popover-body { display: grid; grid-template-columns: 154px auto; }
+.date-presets { display: flex; flex-direction: column; gap: 4px; padding: 18px 12px; border-right: 1px solid var(--border); background: var(--surface-subtle); }
+.date-presets-label { margin: 0 8px 8px; color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; }
+.date-preset { min-height: 45px; display: flex; align-items: center; justify-content: space-between; gap: 7px; padding: 7px 9px; color: var(--muted); border: 1px solid transparent; border-radius: 10px; background: transparent; text-align: left; transition: color .15s, border-color .15s, background .15s; }
+.date-preset:hover { color: var(--ink); background: var(--surface-hover); }
+.date-preset.active { color: var(--orange-dark); border-color: rgba(255,122,26,.25); background: var(--orange-soft); }
+.date-preset > span { display: grid; gap: 2px; }
+.date-preset strong { font-size: 11px; font-weight: 750; }
+.date-preset small { color: var(--muted); font-size: 8px; }
+.date-preset svg { flex: 0 0 auto; }
+.date-popover .rdp-root { --rdp-accent-color: var(--orange); --rdp-accent-background-color: var(--orange-soft); --rdp-day-height: 38px; --rdp-day-width: 38px; --rdp-day_button-height: 34px; --rdp-day_button-width: 34px; --rdp-day_button-border-radius: 9px; --rdp-months-gap: 17px; --rdp-range_middle-color: var(--ink); --rdp-range_start-color: #211005; --rdp-range_end-color: #211005; margin: 16px 18px 17px; font-size: 11px; }
+.date-popover .rdp-month_caption { font: 750 13px/1 'Manrope', sans-serif; }
+.date-popover .rdp-weekday { color: var(--muted); font-size: 8px; font-weight: 800; text-transform: uppercase; }
+.date-popover .rdp-day_button { font-weight: 650; transition: color .15s, background .15s, transform .15s; }
+.date-popover .rdp-day_button:hover:not(:disabled) { color: var(--orange-dark); background: var(--orange-soft); transform: scale(1.06); }
+.date-popover .rdp-today:not(.rdp-selected) .rdp-day_button { color: var(--orange-dark); border-color: rgba(255,122,26,.5); }
+.date-popover .rdp-outside { color: var(--muted); opacity: .48; }
+.date-popover .rdp-range_start .rdp-day_button, .date-popover .rdp-range_end .rdp-day_button { color: #211005; font-weight: 850; box-shadow: 0 4px 12px rgba(255,122,26,.28); }
+.date-popover .rdp-button_previous, .date-popover .rdp-button_next { color: var(--orange-dark); border: 1px solid var(--border); border-radius: 9px; background: var(--surface-subtle); }
+.date-popover .rdp-button_previous:hover, .date-popover .rdp-button_next:hover { border-color: rgba(255,122,26,.35); background: var(--orange-soft); }
+.date-popover-footer { min-height: 65px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 13px 10px 18px; border-top: 1px solid var(--border); background: var(--surface-subtle); }
+.date-popover-footer > span { min-width: 0; display: flex; align-items: center; gap: 7px; overflow: hidden; color: var(--muted); font-size: 10px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.date-popover-footer > span svg { flex: 0 0 auto; color: var(--orange-dark); }
+.date-popover-footer > div { display: flex; flex: 0 0 auto; gap: 7px; }
+.date-popover-footer button { height: 39px; display: grid; place-items: center; padding: 0 15px; border-radius: 9px; font-size: 11px; font-weight: 800; }
+.date-cancel { color: var(--muted); border: 1px solid var(--border); background: var(--surface); }
+.date-cancel:hover { color: var(--ink); border-color: var(--border-strong); }
+.date-apply { min-width: 78px; color: #211005; border: 1px solid var(--orange); background: var(--orange); box-shadow: 0 5px 15px rgba(255,122,26,.2); }
+.date-apply:hover:not(:disabled) { background: #ff8c38; }
+.period-trigger:focus-visible, .date-preset:focus-visible, .date-popover button:focus-visible { outline: 3px solid rgba(255,122,26,.32); outline-offset: 2px; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 .metric-card { position: relative; min-height: 166px; padding: 21px; overflow: hidden; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: 0 10px 35px rgba(30, 20, 12, .04); }
 .metric-card::after { content: ''; position: absolute; width: 100px; height: 100px; right: -55px; bottom: -58px; border-radius: 50%; background: var(--orange-soft); }
@@ -118,6 +159,7 @@ form { display: grid; gap: 18px; }
   .visual-card { opacity: .65; }
   .form-panel { padding-inline: 55px; }
   .dashboard-header { align-items: flex-start; flex-direction: column; }
+  .date-popover { right: auto; left: 0; max-width: calc(100vw - 305px); }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
@@ -141,11 +183,17 @@ form { display: grid; gap: 18px; }
   .sidebar-controls { gap: 8px; }
   .sidebar-control { min-height: 51px; flex-direction: column; justify-content: center; gap: 4px; padding: 5px 2px; font-size: 9px; text-align: center; }
   .dashboard-content { padding: 27px 18px 42px; }
-  .period-filter { width: 100%; align-items: stretch; flex-wrap: wrap; }
-  .period-filter > svg { margin-top: 8px; }
-  .period-filter label { flex: 1; min-width: 105px; }
-  .period-filter input { width: 100%; }
-  .period-filter button { flex: 1 0 100%; }
+  .date-filter, .period-trigger { width: 100%; }
+  .period-trigger { min-width: 0; }
+  .date-popover { width: min(430px, calc(100vw - 126px)); max-width: none; }
+  .date-popover-body { grid-template-columns: 1fr; }
+  .date-presets { flex-flow: row wrap; padding: 12px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .date-presets-label { flex: 1 0 100%; margin: 0 4px 4px; }
+  .date-preset { min-height: 39px; flex: 1 1 115px; }
+  .date-popover .rdp-root { justify-self: center; margin-inline: 12px; }
+  .date-popover-footer { align-items: stretch; flex-direction: column; gap: 8px; }
+  .date-popover-footer > div { width: 100%; }
+  .date-popover-footer button { flex: 1; }
   .metric-grid { grid-template-columns: 1fr; }
   .metric-card { min-height: 148px; }
   .ranking-header { align-items: flex-start; flex-direction: column; }
@@ -157,6 +205,8 @@ form { display: grid; gap: 18px; }
   .mobile-brand { margin-bottom: 45px; }
   .form-heading > p { margin-bottom: 24px; }
   .auth-theme-toggle { right: 19px; }
+  .date-popover { position: fixed; top: 64px; right: 10px; bottom: auto; left: 10px; width: auto; max-height: calc(100vh - 74px); overflow-y: auto; }
+  .date-popover .rdp-root { margin-inline: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
