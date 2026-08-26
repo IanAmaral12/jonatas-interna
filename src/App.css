@@ -50,16 +50,11 @@ form { display: grid; gap: 18px; }
 .input-wrap input:focus { border-color: #ff7a1a; background: #fff; box-shadow: 0 0 0 3px rgba(255,122,26,.12); }
 .visibility-button { position: absolute; right: 8px; top: 50%; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; color: #8c9691; border: 0; border-radius: 7px; background: transparent; transform: translateY(-50%); }
 .visibility-button:hover { color: #405047; background: #eef3f0; }
-.password-hint { margin: -10px 0 -6px; color: #8b9590; font-size: 11px; }
 .form-options { display: flex; align-items: center; justify-content: flex-end; margin-top: -1px; }
-.form-options button, .switch-mode button, .back-button { padding: 0; color: var(--orange-dark); border: 0; background: transparent; font-size: 12px; font-weight: 700; }
-.form-options button:hover, .switch-mode button:hover { color: #a94300; text-decoration: underline; }
+.form-options button, .back-button { padding: 0; color: var(--orange-dark); border: 0; background: transparent; font-size: 12px; font-weight: 700; }
+.form-options button:hover { color: #a94300; text-decoration: underline; }
 .primary-button { width: 100%; height: 50px; display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 3px; color: #fff; border: 0; border-radius: 11px; background: linear-gradient(135deg, #ff841f, #e85d04); box-shadow: 0 9px 22px rgba(232,93,4,.24); font-size: 14px; font-weight: 700; transition: transform .2s, box-shadow .2s; }
 .primary-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 27px rgba(232,93,4,.32); }
-.switch-mode { margin: 28px 0 0; color: #7a8580; text-align: center; font-size: 13px; }
-.switch-mode button { margin-left: 3px; font-size: 13px; }
-.terms { margin: 22px auto 0; max-width: 380px; color: #9aa29f; text-align: center; font-size: 10px; line-height: 1.55; }
-.terms a { color: #68736e; }
 .back-button { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 31px; color: #64706a; }
 .back-button:hover { color: var(--orange-dark); }
 .form-message { padding: 11px 13px; border-radius: 9px; font-size: 12px; line-height: 1.4; }

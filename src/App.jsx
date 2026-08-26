@@ -11,20 +11,17 @@ import {
   Mail,
   ShieldCheck,
   Sparkles,
-  UserRound,
 } from 'lucide-react'
 import { supabase, supabaseConfigError } from './lib/supabase'
 import './App.css'
 
-const initialForm = { name: '', email: '', password: '', confirmPassword: '' }
+const initialForm = { email: '', password: '', confirmPassword: '' }
 
 const errorMessages = {
   'Invalid login credentials': 'E-mail ou senha incorretos.',
   'Email not confirmed': 'Confirme seu e-mail antes de entrar.',
-  'User already registered': 'Já existe uma conta com este e-mail.',
   'Password should be at least 6 characters': 'A senha deve ter pelo menos 6 caracteres.',
   'Unable to validate email address: invalid format': 'Digite um endereço de e-mail válido.',
-  'Signup requires a valid password': 'Digite uma senha válida.',
 }
 
 function friendlyError(message) {
@@ -155,7 +152,7 @@ function App() {
     event.preventDefault()
     if (!requireConfig()) return
 
-    if ((mode === 'signup' || mode === 'update-password') && form.password !== form.confirmPassword) {
+    if (mode === 'update-password' && form.password !== form.confirmPassword) {
       setMessage({ type: 'error', text: 'As senhas não coincidem.' })
       return
     }
@@ -170,24 +167,6 @@ function App() {
           password: form.password,
         })
         if (error) throw error
-      }
-
-      if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({
-          email: form.email,
-          password: form.password,
-          options: {
-            data: { name: form.name },
-            emailRedirectTo: window.location.origin,
-          },
-        })
-        if (error) throw error
-        if (!data.session) {
-          setMessage({
-            type: 'success',
-            text: 'Conta criada! Enviamos um link de confirmação para o seu e-mail.',
-          })
-        }
       }
 
       if (mode === 'forgot') {
@@ -231,23 +210,18 @@ function App() {
   }
 
   const isLogin = mode === 'login'
-  const isSignup = mode === 'signup'
   const isForgot = mode === 'forgot'
   const isUpdate = mode === 'update-password'
   const title = isLogin
     ? 'Bem-vindo de volta'
-    : isSignup
-      ? 'Crie sua conta'
-      : isForgot
-        ? 'Recupere seu acesso'
-        : 'Crie uma nova senha'
+    : isForgot
+      ? 'Recupere seu acesso'
+      : 'Crie uma nova senha'
   const subtitle = isLogin
     ? 'Acesse sua conta e continue de onde parou.'
-    : isSignup
-      ? 'Comece agora. É rápido, seguro e gratuito.'
-      : isForgot
-        ? 'Digite seu e-mail e enviaremos um link seguro.'
-        : 'Escolha uma senha forte para proteger sua conta.'
+    : isForgot
+      ? 'Digite seu e-mail e enviaremos um link seguro.'
+      : 'Escolha uma senha forte para proteger sua conta.'
 
   return (
     <main className="auth-layout">
@@ -296,22 +270,12 @@ function App() {
           )}
 
           <div className="form-heading">
-            <span className="eyebrow">{isSignup ? 'Junte-se a nós' : isForgot || isUpdate ? 'Segurança da conta' : 'Acesse sua conta'}</span>
+            <span className="eyebrow">{isForgot || isUpdate ? 'Segurança da conta' : 'Acesse sua conta'}</span>
             <h2>{title}</h2>
             <p>{subtitle}</p>
           </div>
 
           <form onSubmit={handleSubmit}>
-            {isSignup && (
-              <div className="field-group">
-                <label htmlFor="name">Nome completo</label>
-                <div className="input-wrap">
-                  <UserRound size={18} aria-hidden="true" />
-                  <input id="name" type="text" value={form.name} onChange={updateField('name')} placeholder="Como podemos chamar você?" autoComplete="name" required />
-                </div>
-              </div>
-            )}
-
             {!isUpdate && (
               <div className="field-group">
                 <label htmlFor="email">E-mail</label>
@@ -325,8 +289,7 @@ function App() {
             {!isForgot && (
               <>
                 <PasswordField id="password" label={isUpdate ? 'Nova senha' : 'Senha'} value={form.password} onChange={updateField('password')} autoComplete={isLogin ? 'current-password' : 'new-password'} />
-                {isSignup && <p className="password-hint">Use pelo menos 6 caracteres.</p>}
-                {(isSignup || isUpdate) && (
+                {isUpdate && (
                   <PasswordField id="confirm-password" label="Confirme sua senha" value={form.confirmPassword} onChange={updateField('confirmPassword')} autoComplete="new-password" placeholder="Repita sua senha" />
                 )}
               </>
@@ -342,21 +305,10 @@ function App() {
 
             <button className="primary-button" type="submit" disabled={loading}>
               {loading ? <LoaderCircle className="spin" size={19} /> : (
-                <>{isLogin ? 'Entrar na minha conta' : isSignup ? 'Criar minha conta' : isForgot ? 'Enviar link de recuperação' : 'Salvar nova senha'}<ArrowRight size={18} /></>
+                <>{isLogin ? 'Entrar na minha conta' : isForgot ? 'Enviar link de recuperação' : 'Salvar nova senha'}<ArrowRight size={18} /></>
               )}
             </button>
           </form>
-
-          {(isLogin || isSignup) && (
-            <p className="switch-mode">
-              {isLogin ? 'Ainda não tem uma conta?' : 'Já tem uma conta?'}{' '}
-              <button type="button" onClick={() => changeMode(isLogin ? 'signup' : 'login')}>
-                {isLogin ? 'Criar conta grátis' : 'Entrar agora'}
-              </button>
-            </p>
-          )}
-
-          {isSignup && <p className="terms">Ao criar sua conta, você concorda com nossos <a href="#termos">Termos de Uso</a> e <a href="#privacidade">Política de Privacidade</a>.</p>}
         </div>
       </section>
     </main>

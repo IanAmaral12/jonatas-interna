@@ -23,8 +23,7 @@ npm run dev
 
 ## Recursos incluídos
 
-- Login e cadastro com e-mail e senha
-- Confirmação de cadastro por e-mail
+- Login com e-mail e senha para usuários criados pelo administrador
 - Recuperação e atualização de senha
 - Persistência e observação da sessão
 - Encerramento de sessão
