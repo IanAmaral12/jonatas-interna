@@ -29,3 +29,9 @@ npm run dev
 - Encerramento de sessão
 - Mensagens de erro em português
 - Layout responsivo e acessível
+
+## Banco de dados
+
+As alterações do banco ficam versionadas em `supabase/migrations`. A migração inicial cria a tabela `public.orders` para receber pedidos de plataformas externas. O campo `id` é textual e deve receber o identificador enviado pelo webhook.
+
+A tabela utiliza Row Level Security sem políticas públicas por padrão. Integrações de backend podem gravar com uma chave de servidor; políticas de leitura para usuários autenticados devem ser adicionadas conforme as regras de acesso do dashboard.
