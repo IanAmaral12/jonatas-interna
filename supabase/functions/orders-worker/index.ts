@@ -25,6 +25,8 @@ interface OrderRecord {
   data_pagamento: string | null;
   codigo_rastreio: string | null;
   status_rastreio: string | null;
+  status_pagamento: string | null;
+  cancelado: boolean | null;
 }
 
 const jsonHeaders = {
@@ -82,6 +84,27 @@ function dateOnly(value: unknown): string | null {
   return match?.[1] ?? null;
 }
 
+function dateTimeInSaoPaulo(payload: JsonObject): string | null {
+  const startedAt = cleanString(payload.started_at);
+  const date = cleanString(payload.started_at_data);
+  const time = cleanString(payload.started_at_hora);
+  const candidates = [startedAt, date ? `${date}T${time || "00:00:00"}` : null];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+
+    let normalized = candidate.replace(" ", "T");
+    if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) normalized += "T00:00:00";
+
+    const hasOffset = /(Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+    const parsed = new Date(hasOffset ? normalized : `${normalized}-03:00`);
+
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+
+  return null;
+}
+
 function centsToMoney(value: unknown): number | null {
   if (typeof value !== "number" && typeof value !== "string") return null;
   const cents = Number(value);
@@ -95,13 +118,22 @@ function mapOrder(payload: JsonObject): { event: string | null; order: OrderReco
   const event = cleanString(payload.status) || cleanString(getPath(payload, ["skaletracking", "event"]));
   const phone = cleanString(getPath(payload, ["customer", "phone"]));
   const email = cleanString(getPath(payload, ["customer", "email"]));
+  const skalePaymentStatus =
+    cleanString(getPath(payload, ["skale", "status_pagamento"])) ||
+    cleanString(getPath(payload, ["skaletracking", "status_pagamento"]));
+  const transactionPaymentStatus = cleanString(
+    getPath(payload, ["transaction", "payment_status"]),
+  );
+  const paymentStatus = skalePaymentStatus || transactionPaymentStatus;
+  const cancellationStatuses = [skalePaymentStatus, transactionPaymentStatus]
+    .filter((status): status is string => status !== null);
 
   return {
     event,
     order: {
       id,
       atendente: cleanString(getPath(payload, ["skaletracking", "usuario_responsavel"])),
-      data: dateOnly(payload.started_at_data) || dateOnly(payload.started_at),
+      data: dateTimeInSaoPaulo(payload),
       nome_cliente: cleanString(getPath(payload, ["customer", "name"])),
       contato_cliente: phone || email,
       valor: centsToMoney(getPath(payload, ["product", "price"])),
@@ -114,13 +146,19 @@ function mapOrder(payload: JsonObject): { event: string | null; order: OrderReco
         dateOnly(getPath(payload, ["transaction", "paid_at"])),
       codigo_rastreio: cleanString(getPath(payload, ["shipping", "tracking_code"])),
       status_rastreio: cleanString(getPath(payload, ["skaletracking", "status_entrega"])),
+      status_pagamento: paymentStatus,
+      cancelado: cancellationStatuses.length > 0
+        ? cancellationStatuses.some((status) => status.toLocaleLowerCase("pt-BR").includes("cancelado"))
+        : null,
     },
   };
 }
 
 function compactUpdate(order: OrderRecord): Partial<OrderRecord> {
   return Object.fromEntries(
-    Object.entries(order).filter(([key, value]) => key !== "id" && value !== null),
+    Object.entries(order).filter(([key, value]) =>
+      key !== "id" && key !== "data" && value !== null
+    ),
   ) as Partial<OrderRecord>;
 }
 
@@ -272,7 +310,20 @@ Deno.serve(async (request) => {
       }
 
       if (event === "order_created") {
-        const { error: insertError } = await supabase.from("orders").insert(order);
+        if (!order.data) {
+          await moveToDeadLetter(
+            supabase,
+            queueMessage,
+            "Data e hora de criação ausentes no evento order_created.",
+          );
+          result.dead_lettered += 1;
+          continue;
+        }
+
+        const { error: insertError } = await supabase.from("orders").insert({
+          ...order,
+          cancelado: order.cancelado ?? false,
+        });
 
         if (insertError?.code === "23505") {
           result.duplicates += 1;
