@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  CalendarDays,
+  CircleDollarSign,
   Eye,
   EyeOff,
   LayoutDashboard,
@@ -13,9 +16,22 @@ import {
   ShieldCheck,
   Sparkles,
   Sun,
+  TrendingDown,
+  Users,
 } from 'lucide-react'
+import {
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LinearScale,
+  Tooltip,
+} from 'chart.js'
+import { Bar } from 'react-chartjs-2'
 import { supabase, supabaseConfigError } from './lib/supabase'
 import './App.css'
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
 
 const initialForm = { email: '', password: '', confirmPassword: '' }
 
@@ -70,6 +86,204 @@ function PasswordField({ id, label, value, onChange, autoComplete, placeholder =
   )
 }
 
+function localDateValue(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function money(value, currency) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 2,
+  }).format(Number(value || 0))
+}
+
+function Dashboard({ theme }) {
+  const today = localDateValue()
+  const [filters, setFilters] = useState({ start: today, end: today })
+  const [appliedFilters, setAppliedFilters] = useState({ start: today, end: today })
+  const [rows, setRows] = useState([])
+  const [currency, setCurrency] = useState('BRL')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let active = true
+
+    const loadMetrics = async () => {
+      setLoading(true)
+      setError('')
+      const { data, error: queryError } = await supabase.rpc('get_cpa_dashboard', {
+        p_start_date: appliedFilters.start,
+        p_end_date: appliedFilters.end,
+      })
+
+      if (!active) return
+      if (queryError) {
+        setError('Não foi possível carregar os dados de CPA.')
+        setRows([])
+      } else {
+        setRows((data || []).map((row) => ({
+          ...row,
+          spend: Number(row.spend || 0),
+          appointments: Number(row.appointments || 0),
+          cpa: row.cpa === null ? null : Number(row.cpa),
+        })))
+      }
+      setLoading(false)
+    }
+
+    loadMetrics()
+    return () => { active = false }
+  }, [appliedFilters])
+
+  const currencyRows = rows.filter((row) => row.currency === currency)
+  const summaries = ['BRL', 'USD'].map((summaryCurrency) => {
+    const general = rows.find((row) => row.currency === summaryCurrency && row.row_type === 'general')
+    const spend = general?.spend || 0
+    const appointments = general?.appointments || 0
+    return {
+      currency: summaryCurrency,
+      spend,
+      appointments,
+      cpa: general?.cpa ?? null,
+    }
+  })
+  const ranking = currencyRows
+    .filter((row) => row.seller_id && !row.currency_conflict)
+    .sort((first, second) => {
+      if (first.cpa === null) return 1
+      if (second.cpa === null) return -1
+      return first.cpa - second.cpa
+    })
+  const chartRows = ranking.filter((row) => row.cpa !== null)
+  const unmappedSpend = currencyRows
+    .filter((row) => row.mapping_status !== 'matched')
+    .reduce((total, row) => total + row.spend, 0)
+  const conflicts = currencyRows.filter((row) => row.currency_conflict).length
+
+  const chartData = {
+    labels: chartRows.map((row) => row.seller_name.split(' ')[0]),
+    datasets: [{
+      label: `CPA em ${currency}`,
+      data: chartRows.map((row) => row.cpa),
+      backgroundColor: chartRows.map((_, index) =>
+        index === 0 ? '#ff7a1a' : `rgba(255, 122, 26, ${Math.max(.28, .72 - index * .08)})`
+      ),
+      borderColor: '#ff7a1a',
+      borderWidth: 1,
+      borderRadius: 7,
+      barThickness: 24,
+    }],
+  }
+  const chartOptions = {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (context) => ` CPA: ${money(context.raw, currency)}`,
+          afterLabel: (context) => {
+            const row = chartRows[context.dataIndex]
+            return [`Investimento: ${money(row.spend, currency)}`, `Agendamentos: ${row.appointments}`]
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        beginAtZero: true,
+        grid: { color: theme === 'dark' ? 'rgba(255,255,255,.07)' : 'rgba(24,20,17,.08)' },
+        ticks: { color: theme === 'dark' ? '#aaa19a' : '#746c66' },
+      },
+      y: {
+        grid: { display: false },
+        ticks: { color: theme === 'dark' ? '#fbfaf8' : '#181411', font: { weight: 600 } },
+      },
+    },
+  }
+
+  const applyFilters = (event) => {
+    event.preventDefault()
+    if (filters.start <= filters.end) setAppliedFilters({ ...filters })
+  }
+
+  return (
+    <section id="dashboard" className="dashboard-content" aria-label="Dashboard de CPA">
+      <header className="dashboard-header">
+        <div>
+          <span className="dashboard-eyebrow">Visão de performance</span>
+          <h1>Dashboard de CPA</h1>
+          <p>Custo por agendamento com pedidos cancelados desconsiderados.</p>
+        </div>
+        <form className="period-filter" onSubmit={applyFilters}>
+          <CalendarDays size={18} />
+          <label>
+            <span>De</span>
+            <input type="date" value={filters.start} max={filters.end} onChange={(event) => setFilters((current) => ({ ...current, start: event.target.value }))} />
+          </label>
+          <label>
+            <span>Até</span>
+            <input type="date" value={filters.end} min={filters.start} onChange={(event) => setFilters((current) => ({ ...current, end: event.target.value }))} />
+          </label>
+          <button type="submit" disabled={loading}>{loading ? <LoaderCircle className="spin" size={17} /> : 'Aplicar'}</button>
+        </form>
+      </header>
+
+      {error && <div className="dashboard-alert error"><AlertTriangle size={18} />{error}</div>}
+
+      <div className="metric-grid">
+        {summaries.map((summary) => (
+          <article className="metric-card" key={summary.currency}>
+            <div className="metric-icon"><TrendingDown size={20} /></div>
+            <div className="metric-label"><span>CPA geral</span><b>{summary.currency}</b></div>
+            <strong>{summary.cpa === null ? '—' : money(summary.cpa, summary.currency)}</strong>
+            <small>{summary.appointments} agendamentos</small>
+          </article>
+        ))}
+        <article className="metric-card">
+          <div className="metric-icon"><CircleDollarSign size={20} /></div>
+          <div className="metric-label"><span>Investimento</span><b>{currency}</b></div>
+          <strong>{money(summaries.find((item) => item.currency === currency)?.spend, currency)}</strong>
+          <small>No período selecionado</small>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon"><Users size={20} /></div>
+          <div className="metric-label"><span>Agendamentos</span><b>{currency}</b></div>
+          <strong>{summaries.find((item) => item.currency === currency)?.appointments || 0}</strong>
+          <small>Pedidos válidos atribuídos</small>
+        </article>
+      </div>
+
+      {(unmappedSpend > 0 || conflicts > 0) && (
+        <div className="dashboard-alert"><AlertTriangle size={18} />
+          {unmappedSpend > 0 && `${money(unmappedSpend, currency)} ainda sem vendedor. `}
+          {conflicts > 0 && `${conflicts} vendedor(es) com investimento em mais de uma moeda.`}
+        </div>
+      )}
+
+      <article className="ranking-card">
+        <div className="ranking-header">
+          <div><span>Eficiência por vendedor</span><h2>Ranking de menor CPA</h2></div>
+          <div className="currency-tabs" aria-label="Moeda do ranking">
+            {['BRL', 'USD'].map((item) => <button className={currency === item ? 'active' : ''} type="button" key={item} onClick={() => setCurrency(item)}>{item}</button>)}
+          </div>
+        </div>
+        <div className="chart-area">
+          {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando métricas...</div>
+            : chartRows.length > 0 ? <Bar data={chartData} options={chartOptions} />
+              : <div className="dashboard-empty"><TrendingDown size={28} /><strong>Sem dados para o período</strong><span>O ranking aparecerá após a primeira sincronização da Meta.</span></div>}
+        </div>
+      </article>
+    </section>
+  )
+}
+
 function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
   return (
     <main className="dashboard-shell">
@@ -98,7 +312,7 @@ function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
         </div>
       </aside>
 
-      <section id="dashboard" className="dashboard-content" aria-label="Dashboard" />
+      <Dashboard theme={theme} />
     </main>
   )
 }

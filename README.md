@@ -76,3 +76,17 @@ O Supabase Cron invoca o worker automaticamente uma vez por minuto. Um lease no 
 | `status_pagamento` | `skale.status_pagamento`, `skaletracking.status_pagamento` ou `transaction.payment_status` |
 
 O campo `orders.data` é um `timestamptz`. Datas sem offset explícito enviadas pelo Skale são interpretadas em `America/Sao_Paulo`. O campo `orders.cancelado` é atualizado quando algum status de pagamento contém `cancelado`; pedidos cancelados ficam fora do denominador do CPA.
+
+### Meta Ads e CPA
+
+A Edge Function privada `meta-ads-sync` usa a Graph API v26 para descobrir as contas acessíveis aos dois tokens, consultar Insights no nível de campanha e percorrer toda a paginação. A coleta usa `hourly_stats_aggregated_by_advertiser_time_zone`; cada retrato diário é substituído atomicamente, sem calcular diferenças entre totais acumulados.
+
+O banco preserva moeda, fuso da conta, hora local da Meta e o instante equivalente em UTC. Campanhas são relacionadas aos vendedores por aliases normalizados e o dashboard calcula o CPA como investimento dividido por pedidos não cancelados no mesmo período. BRL e USD permanecem separados.
+
+Para ativar a integração, preencha `supabase/.env.meta.local` com `META_ACCESS_TOKEN_1` e `META_ACCESS_TOKEN_2` e execute:
+
+```powershell
+.\scripts\configure-meta-ads.ps1
+```
+
+O script cadastra os secrets, publica a função, executa a primeira sincronização e agenda novas coletas a cada 10 minutos. Tokens nunca devem ser adicionados ao Git ou expostos em variáveis `VITE_*`.
