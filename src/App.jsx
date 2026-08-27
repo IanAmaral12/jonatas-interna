@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CalendarDays,
+  ChartNoAxesCombined,
   Check,
   ChevronDown,
   CircleDollarSign,
@@ -15,7 +16,9 @@ import {
   LogOut,
   Mail,
   Moon,
+  ReceiptText,
   ShieldCheck,
+  ShoppingBag,
   Sparkles,
   Sun,
   TrendingDown,
@@ -318,6 +321,20 @@ function money(value, currency) {
   }).format(Number(value || 0))
 }
 
+function decimal(value, maximumFractionDigits = 2) {
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits }).format(Number(value || 0))
+}
+
+function rate(value, suffix = '%') {
+  return value === null || value === undefined ? '—' : `${decimal(value)}${suffix}`
+}
+
+function leadToSaleLabel(row) {
+  if (row.leads === 0) return 'Sem leads no período'
+  if (row.sales === 0) return `Nenhuma venda em ${row.leads} leads`
+  return `1 venda a cada ${decimal(row.lead_to_sale_ratio, 1)} leads`
+}
+
 function Dashboard({ theme }) {
   const today = localDateValue()
   const [filters, setFilters] = useState({ start: today, end: today })
@@ -340,14 +357,21 @@ function Dashboard({ theme }) {
 
       if (!active) return
       if (queryError) {
-        setError('Não foi possível carregar os dados de CPA.')
+        setError('Não foi possível carregar os dados do dashboard.')
         setRows([])
       } else {
         setRows((data || []).map((row) => ({
           ...row,
           spend: Number(row.spend || 0),
+          leads: Number(row.leads || 0),
           appointments: Number(row.appointments || 0),
+          sales: Number(row.sales || 0),
+          revenue: Number(row.revenue || 0),
           cpa: row.cpa === null ? null : Number(row.cpa),
+          conversion_rate: row.conversion_rate === null ? null : Number(row.conversion_rate),
+          lead_to_sale_ratio: row.lead_to_sale_ratio === null ? null : Number(row.lead_to_sale_ratio),
+          roas: row.roas === null ? null : Number(row.roas),
+          average_ticket: row.average_ticket === null ? null : Number(row.average_ticket),
         })))
       }
       setLoading(false)
@@ -361,8 +385,15 @@ function Dashboard({ theme }) {
   const general = rows.find((row) => row.currency === currency && row.row_type === 'general')
   const summary = {
     spend: general?.spend || 0,
+    leads: general?.leads || 0,
     appointments: general?.appointments || 0,
+    sales: general?.sales || 0,
+    revenue: general?.revenue || 0,
     cpa: general?.cpa ?? null,
+    conversionRate: general?.conversion_rate ?? null,
+    leadToSaleRatio: general?.lead_to_sale_ratio ?? null,
+    roas: general?.roas ?? null,
+    averageTicket: general?.average_ticket ?? null,
   }
   const cpaRanking = currencyRows
     .filter((row) => row.seller_id && !row.currency_conflict)
@@ -375,6 +406,11 @@ function Dashboard({ theme }) {
   const appointmentRanking = currencyRows
     .filter((row) => row.seller_id && row.appointments > 0)
     .sort((first, second) => second.appointments - first.appointments
+      || first.seller_name.localeCompare(second.seller_name, 'pt-BR'))
+  const commercialRows = currencyRows
+    .filter((row) => row.seller_id)
+    .sort((first, second) => second.sales - first.sales
+      || second.revenue - first.revenue
       || first.seller_name.localeCompare(second.seller_name, 'pt-BR'))
   const bestSeller = cpaRanking[0]
   const unmappedSpend = currencyRows
@@ -433,12 +469,12 @@ function Dashboard({ theme }) {
   }
 
   return (
-    <section id="dashboard" className="dashboard-content" aria-label="Dashboard de CPA">
+    <section id="dashboard" className="dashboard-content" aria-label="Dashboard de performance">
       <header className="dashboard-header">
         <div>
           <span className="dashboard-eyebrow">Visão de performance</span>
-          <h1>Dashboard de CPA</h1>
-          <p>Custo por agendamento com pedidos cancelados desconsiderados.</p>
+          <h1>Dashboard de performance</h1>
+          <p>Mídia, agendamentos e vendas da operação em uma única visão.</p>
         </div>
         <DateRangeFilter
           filters={filters}
@@ -466,7 +502,7 @@ function Dashboard({ theme }) {
         </article>
         <article className="metric-card">
           <div className="metric-icon"><Users size={20} /></div>
-          <div className="metric-label"><span>Agendamentos</span><b>{currency}</b></div>
+          <div className="metric-label"><span>Agendamentos</span><b>Pedidos</b></div>
           <strong>{summary.appointments}</strong>
           <small>Todos os pedidos não cancelados</small>
         </article>
@@ -475,6 +511,30 @@ function Dashboard({ theme }) {
           <div className="metric-label"><span>Melhor CPA</span><b>BRL</b></div>
           <strong>{bestSeller ? money(bestSeller.cpa, currency) : '—'}</strong>
           <small>{bestSeller?.seller_name || 'Aguardando dados'}</small>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon"><ShoppingBag size={20} /></div>
+          <div className="metric-label"><span>Vendas</span><b>Pagas</b></div>
+          <strong>{summary.sales}</strong>
+          <small>{summary.leads} leads · conversão de {rate(summary.conversionRate)}</small>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon"><CircleDollarSign size={20} /></div>
+          <div className="metric-label"><span>Faturamento</span><b>BRL</b></div>
+          <strong>{money(summary.revenue, currency)}</strong>
+          <small>Pedidos pagos criados no período</small>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon"><ChartNoAxesCombined size={20} /></div>
+          <div className="metric-label"><span>ROAS</span><b>Retorno</b></div>
+          <strong>{rate(summary.roas, 'x')}</strong>
+          <small>{summary.roas === null ? 'Sem investimento no período' : `Cada R$ 1 gerou R$ ${decimal(summary.roas)}`}</small>
+        </article>
+        <article className="metric-card">
+          <div className="metric-icon"><ReceiptText size={20} /></div>
+          <div className="metric-label"><span>Ticket médio</span><b>BRL</b></div>
+          <strong>{summary.averageTicket === null ? '—' : money(summary.averageTicket, currency)}</strong>
+          <small>{summary.sales} {summary.sales === 1 ? 'venda paga' : 'vendas pagas'}</small>
         </article>
       </div>
 
@@ -517,6 +577,32 @@ function Dashboard({ theme }) {
           </div>
         </article>
       </div>
+
+      <article className="seller-performance-panel">
+        <div className="ranking-header">
+          <div><span>Funil e retorno</span><h2>Performance comercial por vendedor</h2></div>
+          <span className="currency-reference">Lead = clique no link</span>
+        </div>
+        <div className="seller-performance-scroll">
+          <div className="seller-performance-table">
+            <div className="seller-performance-row seller-performance-head">
+              <span>Vendedor</span><span>Investimento</span><span>Leads × vendas</span><span>Conversão</span><span>Faturamento</span><span>ROAS</span><span>Ticket médio</span>
+            </div>
+            {loading ? <div className="seller-performance-loading"><LoaderCircle className="spin" size={22} />Atualizando indicadores...</div>
+              : commercialRows.length > 0 ? commercialRows.map((row, index) => (
+                <div className="seller-performance-row" key={row.seller_id}>
+                  <div className="seller-cell"><span>{index + 1}</span><strong>{row.seller_name}</strong></div>
+                  <div className="commercial-cell"><small>Investimento</small><strong>{money(row.spend, currency)}</strong></div>
+                  <div className="commercial-cell"><small>Leads × vendas</small><strong>{row.leads} × {row.sales}</strong><em>{leadToSaleLabel(row)}</em></div>
+                  <div className="commercial-cell"><small>Conversão</small><strong>{rate(row.conversion_rate)}</strong></div>
+                  <div className="commercial-cell"><small>Faturamento</small><strong>{money(row.revenue, currency)}</strong></div>
+                  <div className="commercial-cell"><small>ROAS</small><strong>{rate(row.roas, 'x')}</strong></div>
+                  <div className="commercial-cell"><small>Ticket médio</small><strong>{row.average_ticket === null ? '—' : money(row.average_ticket, currency)}</strong></div>
+                </div>
+              )) : <div className="seller-performance-loading"><Users size={23} />Sem dados por vendedor no período.</div>}
+          </div>
+        </div>
+      </article>
     </section>
   )
 }

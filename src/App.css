@@ -159,6 +159,21 @@ form { display: grid; gap: 18px; }
 .rank-cpa small { color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .7px; }
 .rank-cpa strong { color: var(--orange-dark); font: 750 15px/1 'Manrope', sans-serif; white-space: nowrap; }
 .appointment-chart-area { height: 410px; margin-top: 24px; }
+.seller-performance-panel { min-width: 0; margin-top: 20px; padding: 24px; border: 1px solid var(--border); border-radius: 17px; background: var(--surface); box-shadow: 0 12px 40px rgba(30,20,12,.045); }
+.seller-performance-scroll { margin-top: 22px; overflow-x: auto; scrollbar-color: var(--border-strong) transparent; }
+.seller-performance-table { min-width: 970px; display: grid; gap: 7px; }
+.seller-performance-row { min-height: 67px; display: grid; grid-template-columns: minmax(190px, 1.45fr) repeat(6, minmax(105px, 1fr)); align-items: center; gap: 13px; padding: 10px 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-subtle); }
+.seller-performance-head { min-height: 36px; color: var(--muted); border: 0; background: transparent; font-size: 8px; font-weight: 800; letter-spacing: .7px; text-transform: uppercase; }
+.seller-cell { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.seller-cell > span { width: 27px; height: 27px; display: grid; flex: 0 0 auto; place-items: center; color: var(--orange-dark); border-radius: 8px; background: var(--orange-soft); font-size: 10px; font-weight: 850; }
+.seller-cell strong { overflow: hidden; color: var(--ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.commercial-cell { min-width: 0; display: grid; gap: 3px; }
+.commercial-cell small { display: none; color: var(--muted); font-size: 8px; font-weight: 750; text-transform: uppercase; }
+.commercial-cell strong { color: var(--ink); font-size: 11px; white-space: nowrap; }
+.commercial-cell em { overflow: hidden; color: var(--muted); font-size: 8px; font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.seller-performance-row:not(.seller-performance-head):hover { border-color: rgba(255,122,26,.3); background: var(--surface-hover); }
+.seller-performance-loading { min-height: 150px; display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--muted); border: 1px dashed var(--border); border-radius: 12px; background: var(--surface-subtle); font-size: 11px; }
+.seller-performance-loading svg { color: var(--orange-dark); }
 .dashboard-empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 9px; color: var(--muted); border: 1px dashed var(--border); border-radius: 13px; background: var(--surface-subtle); font-size: 12px; text-align: center; }
 .dashboard-empty svg { color: var(--orange-dark); }
 .dashboard-empty strong { color: var(--ink); font-size: 14px; }
@@ -219,6 +234,13 @@ form { display: grid; gap: 18px; }
   .rank-position { width: 31px; height: 31px; }
   .rank-cpa { grid-column: 2; justify-items: start; padding: 7px 0 0; border-top: 1px solid var(--border); border-left: 0; }
   .appointment-chart-area { height: 360px; }
+  .seller-performance-panel { padding: 20px; }
+  .seller-performance-scroll { overflow: visible; }
+  .seller-performance-table { min-width: 0; gap: 10px; }
+  .seller-performance-head { display: none; }
+  .seller-performance-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 10px; padding: 14px; }
+  .seller-cell { grid-column: 1 / -1; padding-bottom: 9px; border-bottom: 1px solid var(--border); }
+  .commercial-cell small { display: block; }
 }
 
 @media (max-width: 430px) {

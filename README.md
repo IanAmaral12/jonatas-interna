@@ -85,6 +85,19 @@ O banco preserva moeda, fuso da conta, hora local da Meta e o instante equivalen
 
 Custos originais ficam registrados em `spend`, enquanto `spend_usd` e `spend_brl` preservam os dois valores convertidos. A taxa USD/BRL é obtida pela API pública Frankfurter v2 com o provedor `BCB` (PTAX de fechamento), e sua data fica gravada junto ao insight. O frontend sempre usa `spend_brl`.
 
+### Métricas comerciais
+
+O dashboard cruza mídia e pedidos pela data de criação do pedido e pelo vendedor normalizado. As definições atuais são:
+
+- **Lead:** clique no link informado pela Meta em `inline_link_clicks`.
+- **Venda:** pedido não cancelado que possui `data_pagamento`.
+- **Faturamento:** soma de `orders.valor` das vendas pagas criadas no período.
+- **Conversão:** vendas pagas divididas pelos leads.
+- **ROAS:** faturamento dividido pelo investimento convertido em BRL.
+- **Ticket médio:** faturamento dividido pela quantidade de vendas pagas.
+
+Pedidos não cancelados continuam sendo tratados como agendamentos para o cálculo de CPA. As métricas são retornadas pelo RPC `get_cpa_dashboard`, tanto no consolidado geral quanto por vendedor.
+
 Para ativar a integração, cadastre `META_ACCESS_TOKEN_1` e `META_ACCESS_TOKEN_2` nos secrets do Supabase e execute:
 
 ```powershell
