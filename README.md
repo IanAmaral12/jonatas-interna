@@ -89,7 +89,8 @@ Custos originais ficam registrados em `spend`, enquanto `spend_usd` e `spend_brl
 
 O dashboard cruza mídia e pedidos pela data de criação do pedido e pelo vendedor normalizado. As definições atuais são:
 
-- **Lead:** clique no link informado pela Meta em `inline_link_clicks`.
+- **Lead:** conversa por mensagem iniciada informada em
+  `actions[action_type=onsite_conversion.messaging_conversation_started_7d]`.
 - **Agendamento:** qualquer pedido com `cancelado = false`.
 - **Faturamento:** soma de `orders.valor` dos agendamentos criados no período.
 - **Conversão:** agendamentos divididos pelos leads.
@@ -97,6 +98,21 @@ O dashboard cruza mídia e pedidos pela data de criação do pedido e pelo vende
 - **Ticket médio:** faturamento dividido pela quantidade de agendamentos.
 
 Pedidos não cancelados continuam sendo tratados como agendamentos para o cálculo de CPA. As métricas são retornadas pelo RPC `get_cpa_dashboard`, tanto no consolidado geral quanto por vendedor.
+
+As conversas são armazenadas separadamente em `meta_campaign_daily_actions`, sem
+alterar os insights horários de investimento. A Edge Function também aceita um
+backfill idempotente e privado com o corpo abaixo (máximo de 31 dias):
+
+```json
+{
+  "mode": "backfill",
+  "start_date": "2026-08-26",
+  "end_date": "2026-08-27"
+}
+```
+
+O backfill exige o header `x-worker-secret`, atualiza somente as ações diárias e
+trata uma resposta `data: []` como operação sem alteração.
 
 Para ativar a integração, cadastre `META_ACCESS_TOKEN_1` e `META_ACCESS_TOKEN_2` nos secrets do Supabase e execute:
 

@@ -330,9 +330,9 @@ function rate(value, suffix = '%') {
 }
 
 function leadToAppointmentLabel(row) {
-  if (row.leads === 0) return 'Sem leads no período'
-  if (row.appointments === 0) return `Nenhum agendamento em ${row.leads} leads`
-  return `1 agendamento a cada ${decimal(row.lead_to_appointment_ratio, 1)} leads`
+  if (row.leads === 0) return 'Sem conversas no período'
+  if (row.appointments === 0) return `Nenhum agendamento em ${row.leads} conversas`
+  return `1 agendamento a cada ${decimal(row.lead_to_appointment_ratio, 1)} conversas`
 }
 
 function Dashboard({ theme }) {
@@ -512,9 +512,9 @@ function Dashboard({ theme }) {
         </article>
         <article className="metric-card">
           <div className="metric-icon"><Target size={20} /></div>
-          <div className="metric-label"><span>Conversão</span><b>Leads</b></div>
+          <div className="metric-label"><span>Conversão</span><b>Conversas</b></div>
           <strong>{rate(summary.conversionRate)}</strong>
-          <small>{summary.leads} leads · {summary.appointments} agendamentos</small>
+          <small>{summary.leads} conversas · {summary.appointments} agendamentos</small>
         </article>
         <article className="metric-card">
           <div className="metric-icon"><CircleDollarSign size={20} /></div>
@@ -579,19 +579,19 @@ function Dashboard({ theme }) {
       <article className="seller-performance-panel">
         <div className="ranking-header">
           <div><span>Funil e retorno</span><h2>Performance comercial por vendedor</h2></div>
-          <span className="currency-reference">Lead = clique no link</span>
+          <span className="currency-reference">Lead = conversa iniciada</span>
         </div>
         <div className="seller-performance-scroll">
           <div className="seller-performance-table">
             <div className="seller-performance-row seller-performance-head">
-              <span>Vendedor</span><span>Investimento</span><span>Leads × agend.</span><span>Conversão</span><span>Faturamento</span><span>ROAS</span><span>Ticket médio</span>
+              <span>Vendedor</span><span>Investimento</span><span>Conversas × agend.</span><span>Conversão</span><span>Faturamento</span><span>ROAS</span><span>Ticket médio</span>
             </div>
             {loading ? <div className="seller-performance-loading"><LoaderCircle className="spin" size={22} />Atualizando indicadores...</div>
               : commercialRows.length > 0 ? commercialRows.map((row, index) => (
                 <div className="seller-performance-row" key={row.seller_id}>
                   <div className="seller-cell"><span>{index + 1}</span><strong>{row.seller_name}</strong></div>
                   <div className="commercial-cell"><small>Investimento</small><strong>{money(row.spend, currency)}</strong></div>
-                  <div className="commercial-cell"><small>Leads × agendamentos</small><strong>{row.leads} × {row.appointments}</strong><em>{leadToAppointmentLabel(row)}</em></div>
+                  <div className="commercial-cell"><small>Conversas × agendamentos</small><strong>{row.leads} × {row.appointments}</strong><em>{leadToAppointmentLabel(row)}</em></div>
                   <div className="commercial-cell"><small>Conversão</small><strong>{rate(row.conversion_rate)}</strong></div>
                   <div className="commercial-cell"><small>Faturamento</small><strong>{money(row.revenue, currency)}</strong></div>
                   <div className="commercial-cell"><small>ROAS</small><strong>{rate(row.roas, 'x')}</strong></div>

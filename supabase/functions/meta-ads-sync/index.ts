@@ -25,8 +25,14 @@ interface MetaInsight extends JsonObject {
   cpc?: string;
   cpm?: string;
   ctr?: string;
+  actions?: MetaAction[];
   date_start?: string;
   hourly_stats_aggregated_by_advertiser_time_zone?: string;
+}
+
+interface MetaAction {
+  action_type?: string;
+  value?: string;
 }
 
 interface MetaPage<T> {
@@ -66,6 +72,9 @@ interface ExchangeRate {
 const GRAPH_VERSION = "v26.0";
 const GRAPH_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
 const EXCHANGE_RATE_URL = "https://api.frankfurter.dev/v2/rate/USD/BRL?providers=BCB";
+const MESSAGING_CONVERSATION_ACTION =
+  "onsite_conversion.messaging_conversation_started_7d";
+const MAX_BACKFILL_DAYS = 31;
 const ACCOUNT_BINDINGS: AccountBinding[] = [
   { accountId: "1010965721683924", tokenSlot: 1 },
   { accountId: "917116774558155", tokenSlot: 1 },
@@ -107,6 +116,34 @@ function nullableNumeric(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function messagingConversations(actions: MetaAction[] | undefined): number {
+  return Math.trunc((actions ?? []).reduce((total, action) => {
+    if (action.action_type !== MESSAGING_CONVERSATION_ACTION) return total;
+    return total + numeric(action.value);
+  }, 0));
+}
+
+function isIsoDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function dateRange(startDate: string, endDate: string): string[] {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  if (start > end) throw new Error("A data inicial do backfill deve ser anterior à data final.");
+
+  const dates: string[] = [];
+  for (const current = new Date(start); current <= end; current.setUTCDate(current.getUTCDate() + 1)) {
+    dates.push(current.toISOString().slice(0, 10));
+    if (dates.length > MAX_BACKFILL_DAYS) {
+      throw new Error(`O backfill aceita no máximo ${MAX_BACKFILL_DAYS} dias por execução.`);
+    }
+  }
+  return dates;
 }
 
 function dateInTimezone(date: Date, timezone: string): string {
@@ -240,9 +277,9 @@ async function loadExchangeRate(supabase: SupabaseClient): Promise<ExchangeRate>
 async function fetchAccountInsights(
   discovered: DiscoveredAccount,
   exchangeRate: ExchangeRate,
+  metricDate = dateInTimezone(new Date(), discovered.account.timezone_name),
 ): Promise<{ metricDate: string; rows: JsonObject[] }> {
   const { account, tokenSlot } = discovered;
-  const metricDate = dateInTimezone(new Date(), account.timezone_name);
   const url = new URL(`${GRAPH_URL}/${account.id}/insights`);
   url.searchParams.set("level", "campaign");
   url.searchParams.set(
@@ -299,6 +336,30 @@ async function fetchAccountInsights(
   return { metricDate, rows };
 }
 
+async function fetchAccountMessagingActions(
+  discovered: DiscoveredAccount,
+  metricDate: string,
+): Promise<JsonObject[]> {
+  const { account, tokenSlot } = discovered;
+  const url = new URL(`${GRAPH_URL}/${account.id}/insights`);
+  url.searchParams.set("level", "campaign");
+  url.searchParams.set("fields", "campaign_id,campaign_name,spend,actions");
+  url.searchParams.set("time_range", JSON.stringify({ since: metricDate, until: metricDate }));
+  url.searchParams.set("time_increment", "1");
+  url.searchParams.set("limit", "500");
+
+  const insights = await fetchAllPages<MetaInsight>(url, tokenSlot.token);
+  return insights.flatMap((insight) => {
+    if (!insight.campaign_id || !insight.campaign_name) return [];
+    return [{
+      campaign_id: insight.campaign_id,
+      campaign_name: insight.campaign_name,
+      messaging_conversations_started: messagingConversations(insight.actions),
+      raw_payload: insight,
+    }];
+  });
+}
+
 async function releaseLease(supabase: SupabaseClient, runId: string): Promise<void> {
   const { error } = await supabase.rpc("release_meta_ads_worker", { requested_owner: runId });
   if (error) console.error("Falha ao liberar lease da Meta:", error.message);
@@ -320,11 +381,24 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Não autorizado." }, 401);
   }
 
-  let mode = "sync";
+  let mode: "sync" | "configure" | "backfill" = "sync";
+  let requestedDates: string[] = [];
   try {
     const body = await request.json();
     if (body?.mode === "configure") mode = "configure";
-  } catch {
+    if (body?.mode === "backfill") {
+      if (!isIsoDate(body.start_date) || !isIsoDate(body.end_date)) {
+        return jsonResponse({
+          error: "Informe start_date e end_date no formato YYYY-MM-DD para executar o backfill.",
+        }, 400);
+      }
+      mode = "backfill";
+      requestedDates = dateRange(body.start_date, body.end_date);
+    }
+  } catch (error) {
+    if (error instanceof Error && request.headers.get("content-type")?.includes("application/json")) {
+      return jsonResponse({ error: error.message }, 400);
+    }
     // O corpo é opcional para uma sincronização normal.
   }
 
@@ -374,9 +448,16 @@ Deno.serve(async (request) => {
   let accountsDiscovered = 0;
   let accountsSynced = 0;
   let rowsReceived = 0;
+  let actionRowsReceived = 0;
+  const actionSummaries: Array<{
+    account_id: string;
+    metric_date: string;
+    rows: number;
+    conversations: number;
+  }> = [];
 
   try {
-    const exchangeRate = await loadExchangeRate(supabase);
+    const exchangeRate = mode === "sync" ? await loadExchangeRate(supabase) : null;
     const discoveryResults = await Promise.allSettled(
       ACCOUNT_BINDINGS.map((binding) => loadConfiguredAccount(binding, tokenSlots)),
     );
@@ -417,32 +498,77 @@ Deno.serve(async (request) => {
         continue;
       }
 
-      try {
-        const { metricDate, rows } = await fetchAccountInsights(discovered, exchangeRate);
-        if (rows.length === 0) {
-          accountsSynced += 1;
-          continue;
+      let accountSucceeded = true;
+
+      if (mode === "sync" && exchangeRate) {
+        try {
+          const { metricDate, rows } = await fetchAccountInsights(discovered, exchangeRate);
+          if (rows.length > 0) {
+            const { data: inserted, error: replaceError } = await supabase.rpc(
+              "replace_meta_hourly_insights",
+              {
+                p_account_id: account.id,
+                p_metric_date: metricDate,
+                p_rows: rows,
+                p_fetched_at: new Date().toISOString(),
+              },
+            );
+            if (replaceError) throw new Error(replaceError.message);
+            rowsReceived += Number(inserted ?? rows.length);
+          }
+        } catch (accountSyncError) {
+          accountSucceeded = false;
+          errors.push({
+            scope: `${account.id}:hourly_insights`,
+            message: accountSyncError instanceof Error
+              ? accountSyncError.message
+              : "Falha desconhecida nos insights horários.",
+          });
         }
-        const { data: inserted, error: replaceError } = await supabase.rpc(
-          "replace_meta_hourly_insights",
-          {
-            p_account_id: account.id,
-            p_metric_date: metricDate,
-            p_rows: rows,
-            p_fetched_at: new Date().toISOString(),
-          },
-        );
-        if (replaceError) throw new Error(replaceError.message);
-        accountsSynced += 1;
-        rowsReceived += Number(inserted ?? rows.length);
-      } catch (accountSyncError) {
-        errors.push({
-          scope: account.id,
-          message: accountSyncError instanceof Error
-            ? accountSyncError.message
-            : "Falha desconhecida na conta de anúncios.",
-        });
       }
+
+      const actionDates = mode === "backfill"
+        ? requestedDates
+        : [dateInTimezone(new Date(), account.timezone_name)];
+
+      for (const metricDate of actionDates) {
+        try {
+          const rows = await fetchAccountMessagingActions(discovered, metricDate);
+          actionSummaries.push({
+            account_id: account.account_id,
+            metric_date: metricDate,
+            rows: rows.length,
+            conversations: rows.reduce(
+              (total, row) => total + numeric(row.messaging_conversations_started),
+              0,
+            ),
+          });
+          // data: [] é um no-op deliberado para preservar o último dado conhecido.
+          if (rows.length === 0) continue;
+
+          const { data: inserted, error: replaceError } = await supabase.rpc(
+            "replace_meta_daily_actions",
+            {
+              p_account_id: account.id,
+              p_metric_date: metricDate,
+              p_rows: rows,
+              p_fetched_at: new Date().toISOString(),
+            },
+          );
+          if (replaceError) throw new Error(replaceError.message);
+          actionRowsReceived += Number(inserted ?? rows.length);
+        } catch (actionSyncError) {
+          accountSucceeded = false;
+          errors.push({
+            scope: `${account.id}:messaging_actions:${metricDate}`,
+            message: actionSyncError instanceof Error
+              ? actionSyncError.message
+              : "Falha desconhecida nas ações de mensagem.",
+          });
+        }
+      }
+
+      if (accountSucceeded) accountsSynced += 1;
     }
 
     const status = errors.length === 0 ? "completed" : accountsSynced > 0 ? "partial" : "failed";
@@ -458,16 +584,22 @@ Deno.serve(async (request) => {
     return jsonResponse({
       run_id: runId,
       graph_version: GRAPH_VERSION,
-      exchange_rate: {
-        date: exchangeRate.date,
-        usd_brl: exchangeRate.rate,
-        source: exchangeRate.source,
-        provider: "BCB",
-      },
+      mode,
+      dates: mode === "backfill" ? requestedDates : undefined,
+      exchange_rate: exchangeRate
+        ? {
+          date: exchangeRate.date,
+          usd_brl: exchangeRate.rate,
+          source: exchangeRate.source,
+          provider: "BCB",
+        }
+        : undefined,
       status,
       accounts_discovered: accountsDiscovered,
       accounts_synced: accountsSynced,
       rows_received: rowsReceived,
+      action_rows_received: actionRowsReceived,
+      action_summaries: actionSummaries,
       errors,
     }, status === "failed" ? 502 : status === "partial" ? 207 : 200);
   } catch (error) {
