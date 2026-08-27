@@ -18,9 +18,9 @@ import {
   Moon,
   ReceiptText,
   ShieldCheck,
-  ShoppingBag,
   Sparkles,
   Sun,
+  Target,
   TrendingDown,
   Users,
 } from 'lucide-react'
@@ -329,10 +329,10 @@ function rate(value, suffix = '%') {
   return value === null || value === undefined ? '—' : `${decimal(value)}${suffix}`
 }
 
-function leadToSaleLabel(row) {
+function leadToAppointmentLabel(row) {
   if (row.leads === 0) return 'Sem leads no período'
-  if (row.sales === 0) return `Nenhuma venda em ${row.leads} leads`
-  return `1 venda a cada ${decimal(row.lead_to_sale_ratio, 1)} leads`
+  if (row.appointments === 0) return `Nenhum agendamento em ${row.leads} leads`
+  return `1 agendamento a cada ${decimal(row.lead_to_appointment_ratio, 1)} leads`
 }
 
 function Dashboard({ theme }) {
@@ -365,11 +365,10 @@ function Dashboard({ theme }) {
           spend: Number(row.spend || 0),
           leads: Number(row.leads || 0),
           appointments: Number(row.appointments || 0),
-          sales: Number(row.sales || 0),
           revenue: Number(row.revenue || 0),
           cpa: row.cpa === null ? null : Number(row.cpa),
           conversion_rate: row.conversion_rate === null ? null : Number(row.conversion_rate),
-          lead_to_sale_ratio: row.lead_to_sale_ratio === null ? null : Number(row.lead_to_sale_ratio),
+          lead_to_appointment_ratio: row.lead_to_appointment_ratio === null ? null : Number(row.lead_to_appointment_ratio),
           roas: row.roas === null ? null : Number(row.roas),
           average_ticket: row.average_ticket === null ? null : Number(row.average_ticket),
         })))
@@ -387,11 +386,9 @@ function Dashboard({ theme }) {
     spend: general?.spend || 0,
     leads: general?.leads || 0,
     appointments: general?.appointments || 0,
-    sales: general?.sales || 0,
     revenue: general?.revenue || 0,
     cpa: general?.cpa ?? null,
     conversionRate: general?.conversion_rate ?? null,
-    leadToSaleRatio: general?.lead_to_sale_ratio ?? null,
     roas: general?.roas ?? null,
     averageTicket: general?.average_ticket ?? null,
   }
@@ -409,7 +406,7 @@ function Dashboard({ theme }) {
       || first.seller_name.localeCompare(second.seller_name, 'pt-BR'))
   const commercialRows = currencyRows
     .filter((row) => row.seller_id)
-    .sort((first, second) => second.sales - first.sales
+    .sort((first, second) => second.appointments - first.appointments
       || second.revenue - first.revenue
       || first.seller_name.localeCompare(second.seller_name, 'pt-BR'))
   const bestSeller = cpaRanking[0]
@@ -450,7 +447,7 @@ function Dashboard({ theme }) {
     scales: {
       x: {
         grid: { display: false },
-        ticks: { color: theme === 'dark' ? '#fbfaf8' : '#181411', font: { weight: 600 } },
+        ticks: { color: theme === 'dark' ? '#fbfaf8' : '#181411', font: { size: 12, weight: 650 } },
       },
       y: {
         beginAtZero: true,
@@ -459,6 +456,7 @@ function Dashboard({ theme }) {
           color: theme === 'dark' ? '#aaa19a' : '#746c66',
           precision: 0,
           stepSize: 1,
+          font: { size: 11, weight: 600 },
         },
       },
     },
@@ -474,7 +472,7 @@ function Dashboard({ theme }) {
         <div>
           <span className="dashboard-eyebrow">Visão de performance</span>
           <h1>Dashboard de performance</h1>
-          <p>Mídia, agendamentos e vendas da operação em uma única visão.</p>
+          <p>Mídia e agendamentos da operação em uma única visão.</p>
         </div>
         <DateRangeFilter
           filters={filters}
@@ -513,16 +511,16 @@ function Dashboard({ theme }) {
           <small>{bestSeller?.seller_name || 'Aguardando dados'}</small>
         </article>
         <article className="metric-card">
-          <div className="metric-icon"><ShoppingBag size={20} /></div>
-          <div className="metric-label"><span>Vendas</span><b>Pagas</b></div>
-          <strong>{summary.sales}</strong>
-          <small>{summary.leads} leads · conversão de {rate(summary.conversionRate)}</small>
+          <div className="metric-icon"><Target size={20} /></div>
+          <div className="metric-label"><span>Conversão</span><b>Leads</b></div>
+          <strong>{rate(summary.conversionRate)}</strong>
+          <small>{summary.leads} leads · {summary.appointments} agendamentos</small>
         </article>
         <article className="metric-card">
           <div className="metric-icon"><CircleDollarSign size={20} /></div>
           <div className="metric-label"><span>Faturamento</span><b>BRL</b></div>
           <strong>{money(summary.revenue, currency)}</strong>
-          <small>Pedidos pagos criados no período</small>
+          <small>Pedidos não cancelados criados no período</small>
         </article>
         <article className="metric-card">
           <div className="metric-icon"><ChartNoAxesCombined size={20} /></div>
@@ -534,7 +532,7 @@ function Dashboard({ theme }) {
           <div className="metric-icon"><ReceiptText size={20} /></div>
           <div className="metric-label"><span>Ticket médio</span><b>BRL</b></div>
           <strong>{summary.averageTicket === null ? '—' : money(summary.averageTicket, currency)}</strong>
-          <small>{summary.sales} {summary.sales === 1 ? 'venda paga' : 'vendas pagas'}</small>
+          <small>{summary.appointments} {summary.appointments === 1 ? 'agendamento' : 'agendamentos'}</small>
         </article>
       </div>
 
@@ -586,14 +584,14 @@ function Dashboard({ theme }) {
         <div className="seller-performance-scroll">
           <div className="seller-performance-table">
             <div className="seller-performance-row seller-performance-head">
-              <span>Vendedor</span><span>Investimento</span><span>Leads × vendas</span><span>Conversão</span><span>Faturamento</span><span>ROAS</span><span>Ticket médio</span>
+              <span>Vendedor</span><span>Investimento</span><span>Leads × agend.</span><span>Conversão</span><span>Faturamento</span><span>ROAS</span><span>Ticket médio</span>
             </div>
             {loading ? <div className="seller-performance-loading"><LoaderCircle className="spin" size={22} />Atualizando indicadores...</div>
               : commercialRows.length > 0 ? commercialRows.map((row, index) => (
                 <div className="seller-performance-row" key={row.seller_id}>
                   <div className="seller-cell"><span>{index + 1}</span><strong>{row.seller_name}</strong></div>
                   <div className="commercial-cell"><small>Investimento</small><strong>{money(row.spend, currency)}</strong></div>
-                  <div className="commercial-cell"><small>Leads × vendas</small><strong>{row.leads} × {row.sales}</strong><em>{leadToSaleLabel(row)}</em></div>
+                  <div className="commercial-cell"><small>Leads × agendamentos</small><strong>{row.leads} × {row.appointments}</strong><em>{leadToAppointmentLabel(row)}</em></div>
                   <div className="commercial-cell"><small>Conversão</small><strong>{rate(row.conversion_rate)}</strong></div>
                   <div className="commercial-cell"><small>Faturamento</small><strong>{money(row.revenue, currency)}</strong></div>
                   <div className="commercial-cell"><small>ROAS</small><strong>{rate(row.roas, 'x')}</strong></div>

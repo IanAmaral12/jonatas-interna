@@ -90,11 +90,11 @@ Custos originais ficam registrados em `spend`, enquanto `spend_usd` e `spend_brl
 O dashboard cruza mídia e pedidos pela data de criação do pedido e pelo vendedor normalizado. As definições atuais são:
 
 - **Lead:** clique no link informado pela Meta em `inline_link_clicks`.
-- **Venda:** pedido não cancelado que possui `data_pagamento`.
-- **Faturamento:** soma de `orders.valor` das vendas pagas criadas no período.
-- **Conversão:** vendas pagas divididas pelos leads.
+- **Agendamento:** qualquer pedido com `cancelado = false`.
+- **Faturamento:** soma de `orders.valor` dos agendamentos criados no período.
+- **Conversão:** agendamentos divididos pelos leads.
 - **ROAS:** faturamento dividido pelo investimento convertido em BRL.
-- **Ticket médio:** faturamento dividido pela quantidade de vendas pagas.
+- **Ticket médio:** faturamento dividido pela quantidade de agendamentos.
 
 Pedidos não cancelados continuam sendo tratados como agendamentos para o cálculo de CPA. As métricas são retornadas pelo RPC `get_cpa_dashboard`, tanto no consolidado geral quanto por vendedor.
 
