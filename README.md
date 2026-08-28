@@ -92,6 +92,7 @@ O dashboard cruza mídia e pedidos pela data de criação do pedido e pelo vende
 - **Lead:** conversa por mensagem iniciada informada em
   `actions[action_type=onsite_conversion.messaging_conversation_started_7d]`.
 - **Agendamento:** qualquer pedido com `cancelado = false`.
+- **CPL:** investimento convertido em BRL dividido pelas conversas iniciadas.
 - **Faturamento:** soma de `orders.valor` dos agendamentos criados no período.
 - **Conversão:** agendamentos divididos pelos leads.
 - **ROAS:** faturamento dividido pelo investimento convertido em BRL.
