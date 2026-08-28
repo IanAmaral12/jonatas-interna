@@ -509,12 +509,6 @@ function Dashboard({ theme }) {
           <small>Todos os pedidos não cancelados</small>
         </article>
         <article className="metric-card">
-          <div className="metric-icon"><Sparkles size={20} /></div>
-          <div className="metric-label"><span>Melhor CPA</span><b>BRL</b></div>
-          <strong>{bestSeller ? money(bestSeller.cpa, currency) : '—'}</strong>
-          <small>{bestSeller?.seller_name || 'Aguardando dados'}</small>
-        </article>
-        <article className="metric-card">
           <div className="metric-icon"><Target size={20} /></div>
           <div className="metric-label"><span>Conversão</span><b>Conversas</b></div>
           <strong>{rate(summary.conversionRate)}</strong>
