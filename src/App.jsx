@@ -407,7 +407,6 @@ function Dashboard({ theme }) {
     .sort((first, second) => second.appointments - first.appointments
       || second.revenue - first.revenue
       || first.seller_name.localeCompare(second.seller_name, 'pt-BR'))
-  const bestSeller = cpaRanking[0]
   const unmappedSpend = currencyRows
     .filter((row) => row.row_type === 'unmatched')
     .reduce((total, row) => total + row.spend, 0)

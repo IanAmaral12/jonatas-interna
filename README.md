@@ -115,6 +115,21 @@ backfill idempotente e privado com o corpo abaixo (máximo de 31 dias):
 O backfill exige o header `x-worker-secret`, atualiza somente as ações diárias e
 trata uma resposta `data: []` como operação sem alteração.
 
+Para carregar insights horários e ações de um período passado sem afetar outras
+contas, use o modo `historical_backfill` com a lista explícita de IDs:
+
+```json
+{
+  "mode": "historical_backfill",
+  "start_date": "2026-08-23",
+  "end_date": "2026-08-29",
+  "account_ids": ["1161460945974128"]
+}
+```
+
+Nesse modo, cada dia em USD usa a PTAX histórica do BCB correspondente — ou a
+última cotação disponível para finais de semana. O limite continua sendo 31 dias.
+
 Para ativar a integração, cadastre `META_ACCESS_TOKEN_1` e `META_ACCESS_TOKEN_2` nos secrets do Supabase e execute:
 
 ```powershell

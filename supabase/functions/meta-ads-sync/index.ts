@@ -71,7 +71,7 @@ interface ExchangeRate {
 
 const GRAPH_VERSION = "v26.0";
 const GRAPH_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
-const EXCHANGE_RATE_URL = "https://api.frankfurter.dev/v2/rate/USD/BRL?providers=BCB";
+const EXCHANGE_RATE_URL = "https://api.frankfurter.dev/v2/rate/USD/BRL";
 const MESSAGING_CONVERSATION_ACTION =
   "onsite_conversion.messaging_conversation_started_7d";
 const MAX_BACKFILL_DAYS = 31;
@@ -221,9 +221,16 @@ async function loadConfiguredAccount(
   return { account, tokenSlot };
 }
 
-async function loadExchangeRate(supabase: SupabaseClient): Promise<ExchangeRate> {
+async function loadExchangeRate(
+  supabase: SupabaseClient,
+  targetDate?: string,
+): Promise<ExchangeRate> {
   try {
-    const response = await fetch(EXCHANGE_RATE_URL);
+    const url = new URL(EXCHANGE_RATE_URL);
+    url.searchParams.set("providers", "BCB");
+    if (targetDate) url.searchParams.set("date", targetDate);
+
+    const response = await fetch(url);
     const payload = await response.json() as JsonObject;
     const rate = numeric(payload.rate);
     const date = typeof payload.date === "string" ? payload.date : "";
@@ -256,12 +263,13 @@ async function loadExchangeRate(supabase: SupabaseClient): Promise<ExchangeRate>
       "Falha ao consultar cotação; tentando último valor persistido:",
       rateError instanceof Error ? rateError.message : rateError,
     );
-    const { data, error } = await supabase
+    let fallbackQuery = supabase
       .from("meta_exchange_rates")
       .select("rate_date,rate,raw_payload")
-      .order("rate_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .order("rate_date", { ascending: false });
+    if (targetDate) fallbackQuery = fallbackQuery.lte("rate_date", targetDate);
+
+    const { data, error } = await fallbackQuery.limit(1).maybeSingle();
     if (error || !data) throw new Error("Nenhuma cotação USD/BRL está disponível.");
     return {
       date: data.rate_date,
@@ -381,19 +389,38 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "Não autorizado." }, 401);
   }
 
-  let mode: "sync" | "configure" | "backfill" = "sync";
+  let mode: "sync" | "configure" | "backfill" | "historical_backfill" = "sync";
   let requestedDates: string[] = [];
+  let requestedAccountIds: string[] = [];
   try {
     const body = await request.json();
     if (body?.mode === "configure") mode = "configure";
-    if (body?.mode === "backfill") {
+    if (body?.mode === "backfill" || body?.mode === "historical_backfill") {
       if (!isIsoDate(body.start_date) || !isIsoDate(body.end_date)) {
         return jsonResponse({
           error: "Informe start_date e end_date no formato YYYY-MM-DD para executar o backfill.",
         }, 400);
       }
-      mode = "backfill";
+      mode = body.mode;
       requestedDates = dateRange(body.start_date, body.end_date);
+
+      if (mode === "historical_backfill") {
+        if (!Array.isArray(body.account_ids) || body.account_ids.length === 0) {
+          return jsonResponse({
+            error: "Informe ao menos uma conta em account_ids para o backfill histórico.",
+          }, 400);
+        }
+        requestedAccountIds = [...new Set(body.account_ids.map(String))];
+        const unknownAccounts = requestedAccountIds.filter(
+          (accountId) => !ACCOUNT_BINDINGS.some((binding) => binding.accountId === accountId),
+        );
+        if (unknownAccounts.length > 0) {
+          return jsonResponse({
+            error: "O backfill histórico recebeu contas que não estão configuradas.",
+            unknown_accounts: unknownAccounts,
+          }, 400);
+        }
+      }
     }
   } catch (error) {
     if (error instanceof Error && request.headers.get("content-type")?.includes("application/json")) {
@@ -455,18 +482,31 @@ Deno.serve(async (request) => {
     rows: number;
     conversations: number;
   }> = [];
+  const insightSummaries: Array<{
+    account_id: string;
+    metric_date: string;
+    rows: number;
+    currency: string;
+    spend: number;
+    spend_brl: number;
+    exchange_rate_date: string;
+  }> = [];
+  let campaignMappings: JsonObject[] = [];
 
   try {
     const exchangeRate = mode === "sync" ? await loadExchangeRate(supabase) : null;
+    const selectedBindings = mode === "historical_backfill"
+      ? ACCOUNT_BINDINGS.filter((binding) => requestedAccountIds.includes(binding.accountId))
+      : ACCOUNT_BINDINGS;
     const discoveryResults = await Promise.allSettled(
-      ACCOUNT_BINDINGS.map((binding) => loadConfiguredAccount(binding, tokenSlots)),
+      selectedBindings.map((binding) => loadConfiguredAccount(binding, tokenSlots)),
     );
     const accounts: DiscoveredAccount[] = [];
 
     discoveryResults.forEach((result, index) => {
       if (result.status === "rejected") {
         errors.push({
-          scope: `act_${ACCOUNT_BINDINGS[index].accountId}`,
+          scope: `act_${selectedBindings[index].accountId}`,
           message: result.reason instanceof Error ? result.reason.message : "Falha ao carregar a conta.",
         });
         return;
@@ -503,6 +543,15 @@ Deno.serve(async (request) => {
       if (mode === "sync" && exchangeRate) {
         try {
           const { metricDate, rows } = await fetchAccountInsights(discovered, exchangeRate);
+          insightSummaries.push({
+            account_id: account.account_id,
+            metric_date: metricDate,
+            rows: rows.length,
+            currency: account.currency,
+            spend: rows.reduce((total, row) => total + numeric(row.spend), 0),
+            spend_brl: rows.reduce((total, row) => total + numeric(row.spend_brl), 0),
+            exchange_rate_date: exchangeRate.date,
+          });
           if (rows.length > 0) {
             const { data: inserted, error: replaceError } = await supabase.rpc(
               "replace_meta_hourly_insights",
@@ -527,7 +576,51 @@ Deno.serve(async (request) => {
         }
       }
 
-      const actionDates = mode === "backfill"
+      if (mode === "historical_backfill") {
+        for (const metricDate of requestedDates) {
+          try {
+            const historicalRate = await loadExchangeRate(supabase, metricDate);
+            const { rows } = await fetchAccountInsights(
+              discovered,
+              historicalRate,
+              metricDate,
+            );
+            insightSummaries.push({
+              account_id: account.account_id,
+              metric_date: metricDate,
+              rows: rows.length,
+              currency: account.currency,
+              spend: rows.reduce((total, row) => total + numeric(row.spend), 0),
+              spend_brl: rows.reduce((total, row) => total + numeric(row.spend_brl), 0),
+              exchange_rate_date: historicalRate.date,
+            });
+            // data: [] não apaga um retrato histórico já armazenado.
+            if (rows.length === 0) continue;
+
+            const { data: inserted, error: replaceError } = await supabase.rpc(
+              "replace_meta_hourly_insights",
+              {
+                p_account_id: account.id,
+                p_metric_date: metricDate,
+                p_rows: rows,
+                p_fetched_at: new Date().toISOString(),
+              },
+            );
+            if (replaceError) throw new Error(replaceError.message);
+            rowsReceived += Number(inserted ?? rows.length);
+          } catch (historicalSyncError) {
+            accountSucceeded = false;
+            errors.push({
+              scope: `${account.id}:historical_insights:${metricDate}`,
+              message: historicalSyncError instanceof Error
+                ? historicalSyncError.message
+                : "Falha desconhecida nos insights históricos.",
+            });
+          }
+        }
+      }
+
+      const actionDates = mode === "backfill" || mode === "historical_backfill"
         ? requestedDates
         : [dateInTimezone(new Date(), account.timezone_name)];
 
@@ -571,6 +664,32 @@ Deno.serve(async (request) => {
       if (accountSucceeded) accountsSynced += 1;
     }
 
+    if (mode === "historical_backfill" && accounts.length > 0) {
+      const accountIds = accounts.map(({ account }) => account.id);
+      const [{ data: campaigns, error: campaignsError }, { data: sellers, error: sellersError }] =
+        await Promise.all([
+          supabase
+            .from("meta_campaigns")
+            .select("id,name,seller_id,mapping_source")
+            .in("ad_account_id", accountIds)
+            .order("name"),
+          supabase.from("sellers").select("id,name"),
+        ]);
+
+      if (campaignsError || sellersError) {
+        errors.push({
+          scope: "campaign_mappings",
+          message: campaignsError?.message || sellersError?.message || "Falha ao validar campanhas.",
+        });
+      } else {
+        const sellerNames = new Map((sellers ?? []).map((seller) => [seller.id, seller.name]));
+        campaignMappings = (campaigns ?? []).map((campaign) => ({
+          ...campaign,
+          seller_name: campaign.seller_id ? sellerNames.get(campaign.seller_id) ?? null : null,
+        }));
+      }
+    }
+
     const status = errors.length === 0 ? "completed" : accountsSynced > 0 ? "partial" : "failed";
     await supabase.from("meta_sync_runs").update({
       finished_at: new Date().toISOString(),
@@ -585,7 +704,10 @@ Deno.serve(async (request) => {
       run_id: runId,
       graph_version: GRAPH_VERSION,
       mode,
-      dates: mode === "backfill" ? requestedDates : undefined,
+      dates: mode === "backfill" || mode === "historical_backfill"
+        ? requestedDates
+        : undefined,
+      account_ids: mode === "historical_backfill" ? requestedAccountIds : undefined,
       exchange_rate: exchangeRate
         ? {
           date: exchangeRate.date,
@@ -598,8 +720,10 @@ Deno.serve(async (request) => {
       accounts_discovered: accountsDiscovered,
       accounts_synced: accountsSynced,
       rows_received: rowsReceived,
+      insight_summaries: insightSummaries,
       action_rows_received: actionRowsReceived,
       action_summaries: actionSummaries,
+      campaign_mappings: mode === "historical_backfill" ? campaignMappings : undefined,
       errors,
     }, status === "failed" ? 502 : status === "partial" ? 207 : 200);
   } catch (error) {
