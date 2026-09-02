@@ -189,18 +189,17 @@ form { display: grid; gap: 18px; }
 .cash-flow-message { margin-top: 16px; padding: 12px 14px; border-radius: 11px; font-size: 12px; font-weight: 650; }
 .cash-flow-message.error { color: var(--error-text); border: 1px solid var(--error-border); background: var(--error-bg); }
 .cash-flow-message.success { color: var(--success-text); border: 1px solid var(--success-border); background: var(--success-bg); }
-.cash-flow-grid { display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); gap: 20px; margin-top: 20px; align-items: start; }
-.cash-entry-panel, .cash-history-panel { min-width: 0; padding: 24px; border: 1px solid var(--border); border-radius: 17px; background: var(--surface); box-shadow: 0 12px 40px rgba(30,20,12,.045); }
-.cash-panel-heading > span, .cash-history-heading > div > span { color: var(--orange-dark); font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+.cash-history-panel { min-width: 0; min-height: 454px; margin-top: 20px; padding: 24px; border: 1px solid var(--border); border-radius: 17px; background: var(--surface); box-shadow: 0 12px 40px rgba(30,20,12,.045); }
+.cash-history-heading > div > span { color: var(--orange-dark); font-size: 10px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
 .cash-panel-heading h2 { margin: 6px 0 0; color: var(--ink); font: 700 20px/1.25 'Manrope', sans-serif; letter-spacing: -.5px; }
 .cash-entry-form { gap: 17px; margin-top: 24px; }
 .cash-field { display: grid; gap: 8px; }
 .cash-field label, .cash-type-field legend { color: var(--ink); font-size: 12px; font-weight: 750; }
-.cash-field input, .cash-field textarea { width: 100%; color: var(--ink); outline: none; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-subtle); font-size: 13px; transition: border-color .2s, box-shadow .2s, background .2s; }
-.cash-field input { height: 45px; padding: 0 13px; }
+.cash-field input, .cash-field textarea, .cash-field select { width: 100%; color: var(--ink); outline: none; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-subtle); font-size: 13px; transition: border-color .2s, box-shadow .2s, background .2s; }
+.cash-field input, .cash-field select { height: 45px; padding: 0 13px; }
 .cash-field textarea { min-height: 104px; padding: 12px 13px; resize: vertical; line-height: 1.5; }
 .cash-field input::placeholder, .cash-field textarea::placeholder { color: var(--muted); opacity: .7; }
-.cash-field input:focus, .cash-field textarea:focus { border-color: var(--orange); background: var(--surface); box-shadow: 0 0 0 3px rgba(255,122,26,.14); }
+.cash-field input:focus, .cash-field textarea:focus, .cash-field select:focus { border-color: var(--orange); background: var(--surface); box-shadow: 0 0 0 3px rgba(255,122,26,.14); }
 .cash-amount-input { position: relative; }
 .cash-amount-input > span { position: absolute; z-index: 1; left: 13px; top: 50%; color: var(--orange-dark); font-size: 12px; font-weight: 800; transform: translateY(-50%); }
 .cash-amount-input input { padding-left: 40px; }
@@ -212,15 +211,25 @@ form { display: grid; gap: 18px; }
 .cash-type-toggle button.active.expense { color: var(--error-text); border-color: var(--error-border); background: var(--error-bg); }
 .cash-submit-button { min-height: 47px; display: flex; align-items: center; justify-content: center; gap: 9px; color: #211005; border: 0; border-radius: 11px; background: linear-gradient(135deg, #ff9a47, #ff7412); box-shadow: 0 9px 22px rgba(232,93,4,.22); font-size: 13px; font-weight: 800; transition: transform .2s, box-shadow .2s; }
 .cash-submit-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 27px rgba(232,93,4,.3); }
-.cash-history-panel { min-height: 454px; }
 .cash-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.cash-history-heading b { flex: 0 0 auto; padding: 7px 10px; color: var(--orange-dark); border-radius: 8px; background: var(--orange-soft); font-size: 10px; }
-.cash-history-scroll { margin-top: 22px; overflow-x: auto; }
+.cash-new-entry-button { min-height: 42px; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; padding: 0 15px; color: #211005; border: 0; border-radius: 10px; background: linear-gradient(135deg, #ff9a47, #ff7412); box-shadow: 0 8px 20px rgba(232,93,4,.2); font-size: 12px; font-weight: 800; transition: transform .2s, box-shadow .2s; }
+.cash-new-entry-button:hover { transform: translateY(-1px); box-shadow: 0 11px 24px rgba(232,93,4,.28); }
+.cash-filter-bar { display: grid; grid-template-columns: repeat(2, minmax(130px, .8fr)) repeat(2, minmax(145px, 1fr)) auto; align-items: end; gap: 10px; margin-top: 22px; padding: 14px; border: 1px solid var(--border); border-radius: 13px; background: var(--surface-subtle); }
+.cash-filter-field { min-width: 0; display: grid; gap: 6px; }
+.cash-filter-field label { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .55px; text-transform: uppercase; }
+.cash-filter-field input, .cash-filter-field select { width: 100%; height: 40px; padding: 0 10px; color: var(--ink); outline: none; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); font-size: 11px; }
+.cash-filter-field input:focus, .cash-filter-field select:focus { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(255,122,26,.12); }
+.cash-clear-filters { height: 40px; padding: 0 12px; color: var(--orange-dark); border: 1px solid rgba(255,122,26,.22); border-radius: 9px; background: var(--orange-soft); font-size: 10px; font-weight: 800; white-space: nowrap; }
+.cash-clear-filters:hover:not(:disabled) { border-color: var(--orange); }
+.cash-clear-filters:disabled { cursor: default; opacity: .45; }
+.cash-results-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 16px 2px 0; color: var(--muted); font-size: 10px; font-weight: 700; }
+.cash-results-summary b { color: var(--orange-dark); font-size: 9px; letter-spacing: .55px; text-transform: uppercase; }
+.cash-history-scroll { margin-top: 12px; overflow-x: auto; }
 .cash-history-table { min-width: 790px; display: grid; gap: 7px; }
 .cash-history-row { min-height: 59px; display: grid; grid-template-columns: 120px 130px minmax(180px, 1fr) 100px 120px 38px; align-items: center; gap: 12px; padding: 9px 11px; color: var(--ink); border: 1px solid var(--border); border-radius: 11px; background: var(--surface-subtle); font-size: 11px; }
 .cash-history-head { min-height: 35px; color: var(--muted); border: 0; background: transparent; font-size: 9px; font-weight: 800; letter-spacing: .65px; text-transform: uppercase; }
-.cash-author-cell, .cash-description-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cash-author-cell { font-weight: 700; }
+.cash-responsible-cell, .cash-description-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cash-responsible-cell { font-weight: 700; }
 .cash-entry-type { width: fit-content; display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; border-radius: 8px; font-size: 10px; font-weight: 800; }
 .cash-entry-type.entrada { color: var(--orange-dark); background: var(--orange-soft); }
 .cash-entry-type.saida { color: var(--error-text); background: var(--error-bg); }
@@ -234,6 +243,30 @@ form { display: grid; gap: 18px; }
 .cash-empty-state svg { color: var(--orange-dark); }
 .cash-empty-state strong { color: var(--ink); font-size: 14px; }
 .cash-empty-state span { max-width: 250px; line-height: 1.5; }
+.cash-modal-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 22px; overflow-y: auto; background: rgba(7,6,5,.68); backdrop-filter: blur(5px); animation: cash-backdrop-in .18s ease-out; }
+.cash-modal { width: min(100%, 480px); padding: 24px; color: var(--ink); border: 1px solid var(--border-strong); border-radius: 18px; background: var(--surface); box-shadow: 0 30px 90px rgba(0,0,0,.35); animation: cash-modal-in .2s ease-out; }
+@keyframes cash-backdrop-in { from { opacity: 0; } }
+@keyframes cash-modal-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.cash-modal-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.cash-modal-header span { color: var(--orange-dark); font-size: 9px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; }
+.cash-modal-header h2, .cash-delete-modal h2 { margin: 6px 0 0; color: var(--ink); font: 700 22px/1.2 'Manrope', sans-serif; letter-spacing: -.6px; }
+.cash-modal-header > button { width: 36px; height: 36px; display: grid; flex: 0 0 auto; place-items: center; padding: 0; color: var(--muted); border: 1px solid var(--border); border-radius: 9px; background: var(--surface-subtle); }
+.cash-modal-header > button:hover:not(:disabled) { color: var(--ink); border-color: var(--border-strong); }
+.cash-entry-form > .cash-flow-message { margin-top: -5px; }
+.cash-modal-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 5px; }
+.cash-modal-actions > button { min-height: 44px; padding: 0 16px; }
+.cash-modal-cancel { color: var(--muted); border: 1px solid var(--border); border-radius: 10px; background: var(--surface-subtle); font-size: 12px; font-weight: 750; }
+.cash-modal-cancel:hover:not(:disabled) { color: var(--ink); border-color: var(--border-strong); }
+.cash-delete-modal { width: min(100%, 430px); text-align: center; }
+.cash-delete-icon { width: 48px; height: 48px; display: grid; place-items: center; margin: 0 auto 14px; color: var(--error-text); border: 1px solid var(--error-border); border-radius: 14px; background: var(--error-bg); }
+.cash-delete-modal p { margin: 11px auto 17px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.cash-delete-details { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 12px 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-subtle); font-size: 11px; }
+.cash-delete-details span { color: var(--muted); font-weight: 700; }
+.cash-delete-details strong { color: var(--ink); font-size: 13px; }
+.cash-delete-modal .cash-flow-message { margin: 0 0 14px; text-align: left; }
+.cash-delete-modal .cash-modal-actions { margin-top: 18px; }
+.cash-delete-confirm { display: inline-flex; align-items: center; justify-content: center; gap: 8px; color: #fff; border: 1px solid #a33131; border-radius: 10px; background: #a33131; font-size: 12px; font-weight: 800; }
+.cash-delete-confirm:hover:not(:disabled) { background: #8e2929; }
 .dashboard-empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 9px; color: var(--muted); border: 1px dashed var(--border); border-radius: 13px; background: var(--surface-subtle); font-size: 12px; text-align: center; }
 .dashboard-empty svg { color: var(--orange-dark); }
 .dashboard-empty strong { color: var(--ink); font-size: 14px; }
@@ -254,8 +287,8 @@ form { display: grid; gap: 18px; }
 @media (max-width: 960px) {
   .analytics-grid { grid-template-columns: minmax(0, 1fr); }
   .performance-panel { min-height: 0; }
-  .cash-flow-grid { grid-template-columns: minmax(0, 1fr); }
-  .cash-entry-panel { max-width: none; }
+  .cash-filter-bar { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cash-clear-filters { width: fit-content; }
 }
 
 @media (max-width: 760px) {
@@ -293,7 +326,7 @@ form { display: grid; gap: 18px; }
   .metric-card { min-height: 148px; }
   .cash-summary-grid { grid-template-columns: 1fr; }
   .cash-summary-card { min-height: 102px; }
-  .cash-entry-panel, .cash-history-panel { padding: 20px; }
+  .cash-history-panel { padding: 20px; }
   .cash-history-heading { align-items: flex-start; }
   .ranking-header { align-items: flex-start; flex-direction: column; }
   .cpa-rank-card { grid-template-columns: 32px minmax(0, 1fr); }
@@ -316,6 +349,12 @@ form { display: grid; gap: 18px; }
   .auth-theme-toggle { right: 19px; }
   .date-popover { position: fixed; top: 64px; right: 10px; bottom: auto; left: 10px; width: auto; max-height: calc(100vh - 74px); overflow-y: auto; }
   .date-popover .rdp-root { margin-inline: auto; }
+  .cash-flow-header { align-items: flex-start; }
+  .cash-history-heading { flex-direction: column; }
+  .cash-new-entry-button { width: 100%; }
+  .cash-filter-bar { grid-template-columns: 1fr; }
+  .cash-clear-filters { width: 100%; }
+  .cash-results-summary { align-items: flex-start; flex-direction: column; gap: 5px; }
   .cash-history-scroll { overflow: visible; }
   .cash-history-table { min-width: 0; }
   .cash-history-head { display: none; }
@@ -325,6 +364,9 @@ form { display: grid; gap: 18px; }
   .cash-description-cell { grid-column: 1 / -1; white-space: normal; }
   .cash-actions-cell { grid-column: 2; justify-content: end; align-self: end; }
   .cash-actions-cell::before { display: none; }
+  .cash-modal-backdrop { align-items: end; padding: 10px; }
+  .cash-modal { max-height: calc(100vh - 20px); padding: 20px; overflow-y: auto; border-radius: 18px 18px 12px 12px; }
+  .cash-modal-actions { display: grid; grid-template-columns: 1fr 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

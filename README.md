@@ -141,7 +141,7 @@ O script publica a função, executa a primeira sincronização e agenda novas c
 ### Fluxo de caixa
 
 A página **Fluxo de caixa** permite que usuários autenticados cadastrem
-manualmente entradas e saídas em BRL. Cada lançamento registra autor, valor,
+manualmente entradas e saídas em BRL. Cada lançamento registra responsável, valor,
 descrição, tipo, data automática e o usuário do Supabase responsável pela criação.
 
 Os dados ficam em `cash_flow_entries`, protegidos por RLS. O frontend mostra o

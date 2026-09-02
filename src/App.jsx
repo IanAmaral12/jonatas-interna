@@ -29,6 +29,7 @@ import {
   TrendingDown,
   Users,
   WalletCards,
+  X,
 } from 'lucide-react'
 import { DayPicker } from '@daypicker/react'
 import { ptBR } from '@daypicker/react/locale'
@@ -611,10 +612,17 @@ function Dashboard({ theme }) {
 }
 
 const emptyCashEntry = {
-  author: '',
+  responsible: 'Jonatas',
   amount: '',
   description: '',
   entryType: 'entrada',
+}
+
+const emptyCashFilters = {
+  startDate: '',
+  endDate: '',
+  entryType: 'all',
+  responsible: 'all',
 }
 
 function cashFlowDate(value) {
@@ -635,9 +643,12 @@ function parseCashAmount(value) {
 function CashFlowPage() {
   const [entries, setEntries] = useState([])
   const [form, setForm] = useState(emptyCashEntry)
+  const [filters, setFilters] = useState(emptyCashFilters)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [deletingId, setDeletingId] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const [isEntryModalOpen, setIsEntryModalOpen] = useState(false)
+  const [entryToDelete, setEntryToDelete] = useState(null)
   const [message, setMessage] = useState(null)
 
   useEffect(() => {
@@ -647,7 +658,7 @@ function CashFlowPage() {
       setLoading(true)
       const { data, error } = await supabase
         .from('cash_flow_entries')
-        .select('id,author,amount,description,entry_type,created_at')
+        .select('id,responsible,amount,description,entry_type,created_at')
         .order('created_at', { ascending: false })
 
       if (!active) return
@@ -667,16 +678,41 @@ function CashFlowPage() {
     return () => { active = false }
   }, [])
 
-  const totals = entries.reduce((result, entry) => {
+  useEffect(() => {
+    if (!isEntryModalOpen && !entryToDelete) return undefined
+    const closeOnEscape = (event) => {
+      if (event.key !== 'Escape') return
+      if (entryToDelete && !deleting) setEntryToDelete(null)
+      if (isEntryModalOpen && !saving) setIsEntryModalOpen(false)
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [deleting, entryToDelete, isEntryModalOpen, saving])
+
+  const filteredEntries = entries.filter((entry) => {
+    const entryDate = localDateValue(new Date(entry.created_at))
+    if (filters.startDate && entryDate < filters.startDate) return false
+    if (filters.endDate && entryDate > filters.endDate) return false
+    if (filters.entryType !== 'all' && entry.entry_type !== filters.entryType) return false
+    if (filters.responsible !== 'all' && entry.responsible !== filters.responsible) return false
+    return true
+  })
+
+  const totals = filteredEntries.reduce((result, entry) => {
     if (entry.entry_type === 'entrada') result.income += entry.amount
     if (entry.entry_type === 'saida') result.expenses += entry.amount
     return result
   }, { income: 0, expenses: 0 })
   const balance = totals.income - totals.expenses
+  const hasFilters = Object.values(filters).some((value) => value !== '' && value !== 'all')
 
   const updateCashField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))
     if (message) setMessage(null)
+  }
+
+  const updateCashFilter = (field) => (event) => {
+    setFilters((current) => ({ ...current, [field]: event.target.value }))
   }
 
   const saveEntry = async (event) => {
@@ -692,12 +728,12 @@ function CashFlowPage() {
     const { data, error } = await supabase
       .from('cash_flow_entries')
       .insert({
-        author: form.author.trim(),
+        responsible: form.responsible,
         amount,
         description: form.description.trim(),
         entry_type: form.entryType,
       })
-      .select('id,author,amount,description,entry_type,created_at')
+      .select('id,responsible,amount,description,entry_type,created_at')
       .single()
 
     if (error) {
@@ -705,25 +741,28 @@ function CashFlowPage() {
     } else {
       setEntries((current) => [{ ...data, amount: Number(data.amount) }, ...current])
       setForm(emptyCashEntry)
+      setIsEntryModalOpen(false)
       setMessage({ type: 'success', text: 'Lançamento adicionado ao fluxo de caixa.' })
     }
     setSaving(false)
   }
 
-  const deleteEntry = async (entry) => {
-    const confirmed = window.confirm(`Excluir o lançamento “${entry.description}”?`)
-    if (!confirmed) return
-
-    setDeletingId(entry.id)
+  const deleteEntry = async () => {
+    if (!entryToDelete) return
+    setDeleting(true)
     setMessage(null)
-    const { error } = await supabase.from('cash_flow_entries').delete().eq('id', entry.id)
+    const { error } = await supabase
+      .from('cash_flow_entries')
+      .delete()
+      .eq('id', entryToDelete.id)
     if (error) {
       setMessage({ type: 'error', text: 'Não foi possível excluir o lançamento.' })
     } else {
-      setEntries((current) => current.filter((item) => item.id !== entry.id))
+      setEntries((current) => current.filter((item) => item.id !== entryToDelete.id))
       setMessage({ type: 'success', text: 'Lançamento excluído.' })
+      setEntryToDelete(null)
     }
-    setDeletingId(null)
+    setDeleting(false)
   }
 
   return (
@@ -740,153 +779,196 @@ function CashFlowPage() {
       <div className="cash-summary-grid">
         <article className="cash-summary-card income">
           <span><ArrowUpRight size={20} /></span>
-          <div><small>Total de entradas</small><strong>{money(totals.income, 'BRL')}</strong></div>
+          <div><small>{hasFilters ? 'Entradas filtradas' : 'Total de entradas'}</small><strong>{money(totals.income, 'BRL')}</strong></div>
         </article>
         <article className="cash-summary-card expense">
           <span><ArrowDownLeft size={20} /></span>
-          <div><small>Total de saídas</small><strong>{money(totals.expenses, 'BRL')}</strong></div>
+          <div><small>{hasFilters ? 'Saídas filtradas' : 'Total de saídas'}</small><strong>{money(totals.expenses, 'BRL')}</strong></div>
         </article>
         <article className={`cash-summary-card balance${balance < 0 ? ' negative' : ''}`}>
           <span><WalletCards size={20} /></span>
-          <div><small>Saldo atual</small><strong>{money(balance, 'BRL')}</strong></div>
+          <div><small>{hasFilters ? 'Saldo filtrado' : 'Saldo atual'}</small><strong>{money(balance, 'BRL')}</strong></div>
         </article>
       </div>
 
       {message && <div className={`cash-flow-message ${message.type}`} role="status">{message.text}</div>}
 
-      <div className="cash-flow-grid">
-        <article className="cash-entry-panel">
-          <div className="cash-panel-heading">
-            <span>Novo lançamento</span>
-            <h2>Adicionar movimentação</h2>
+      <article className="cash-history-panel">
+        <div className="cash-panel-heading cash-history-heading">
+          <div><span>Movimentações</span><h2>Histórico de lançamentos</h2></div>
+          <button
+            className="cash-new-entry-button"
+            type="button"
+            onClick={() => {
+              setForm(emptyCashEntry)
+              setMessage(null)
+              setIsEntryModalOpen(true)
+            }}
+          >
+            <Plus size={17} /> Novo lançamento
+          </button>
+        </div>
+
+        <div className="cash-filter-bar" aria-label="Filtros do fluxo de caixa">
+          <div className="cash-filter-field">
+            <label htmlFor="cash-filter-start">Data inicial</label>
+            <input id="cash-filter-start" type="date" value={filters.startDate} max={filters.endDate || undefined} onChange={updateCashFilter('startDate')} />
           </div>
-
-          <form className="cash-entry-form" onSubmit={saveEntry}>
-            <div className="cash-field">
-              <label htmlFor="cash-author">Autor</label>
-              <input
-                id="cash-author"
-                type="text"
-                value={form.author}
-                onChange={updateCashField('author')}
-                placeholder="Nome de quem registrou"
-                maxLength={120}
-                required
-              />
-            </div>
-
-            <div className="cash-field">
-              <label htmlFor="cash-amount">Valor</label>
-              <div className="cash-amount-input">
-                <span>R$</span>
-                <input
-                  id="cash-amount"
-                  type="text"
-                  inputMode="decimal"
-                  value={form.amount}
-                  onChange={updateCashField('amount')}
-                  placeholder="0,00"
-                  required
-                />
-              </div>
-            </div>
-
-            <fieldset className="cash-type-field">
-              <legend>Tipo de movimentação</legend>
-              <div className="cash-type-toggle">
-                <button
-                  className={form.entryType === 'entrada' ? 'active income' : ''}
-                  type="button"
-                  aria-pressed={form.entryType === 'entrada'}
-                  onClick={() => setForm((current) => ({ ...current, entryType: 'entrada' }))}
-                >
-                  <ArrowUpRight size={17} /> Entrada
-                </button>
-                <button
-                  className={form.entryType === 'saida' ? 'active expense' : ''}
-                  type="button"
-                  aria-pressed={form.entryType === 'saida'}
-                  onClick={() => setForm((current) => ({ ...current, entryType: 'saida' }))}
-                >
-                  <ArrowDownLeft size={17} /> Saída
-                </button>
-              </div>
-            </fieldset>
-
-            <div className="cash-field">
-              <label htmlFor="cash-description">Descrição</label>
-              <textarea
-                id="cash-description"
-                value={form.description}
-                onChange={updateCashField('description')}
-                placeholder="Descreva a origem ou finalidade do valor"
-                rows={4}
-                maxLength={500}
-                required
-              />
-            </div>
-
-            <button className="cash-submit-button" type="submit" disabled={saving}>
-              {saving ? <LoaderCircle className="spin" size={18} /> : <Plus size={18} />}
-              {saving ? 'Salvando...' : 'Adicionar lançamento'}
-            </button>
-          </form>
-        </article>
-
-        <article className="cash-history-panel">
-          <div className="cash-panel-heading cash-history-heading">
-            <div><span>Movimentações</span><h2>Histórico de lançamentos</h2></div>
-            <b>{entries.length} {entries.length === 1 ? 'registro' : 'registros'}</b>
+          <div className="cash-filter-field">
+            <label htmlFor="cash-filter-end">Data final</label>
+            <input id="cash-filter-end" type="date" value={filters.endDate} min={filters.startDate || undefined} onChange={updateCashFilter('endDate')} />
           </div>
+          <div className="cash-filter-field">
+            <label htmlFor="cash-filter-type">Tipo</label>
+            <select id="cash-filter-type" value={filters.entryType} onChange={updateCashFilter('entryType')}>
+              <option value="all">Entradas e saídas</option>
+              <option value="entrada">Entrada</option>
+              <option value="saida">Saída</option>
+            </select>
+          </div>
+          <div className="cash-filter-field">
+            <label htmlFor="cash-filter-responsible">Responsável</label>
+            <select id="cash-filter-responsible" value={filters.responsible} onChange={updateCashFilter('responsible')}>
+              <option value="all">Todos</option>
+              <option value="Jonatas">Jonatas</option>
+              <option value="João Vitor">João Vitor</option>
+            </select>
+          </div>
+          <button className="cash-clear-filters" type="button" disabled={!hasFilters} onClick={() => setFilters(emptyCashFilters)}>
+            Limpar filtros
+          </button>
+        </div>
 
-          <div className="cash-history-scroll">
-            {loading ? (
-              <div className="cash-empty-state"><LoaderCircle className="spin" size={24} />Carregando lançamentos...</div>
-            ) : entries.length === 0 ? (
-              <div className="cash-empty-state">
-                <WalletCards size={30} />
-                <strong>Nenhum lançamento ainda</strong>
-                <span>Adicione a primeira entrada ou saída usando o formulário.</span>
+        <div className="cash-results-summary">
+          <span>{filteredEntries.length} {filteredEntries.length === 1 ? 'lançamento encontrado' : 'lançamentos encontrados'}</span>
+          {hasFilters && <b>Balanço do período filtrado</b>}
+        </div>
+
+        <div className="cash-history-scroll">
+          {loading ? (
+            <div className="cash-empty-state"><LoaderCircle className="spin" size={24} />Carregando lançamentos...</div>
+          ) : filteredEntries.length === 0 ? (
+            <div className="cash-empty-state">
+              <WalletCards size={30} />
+              <strong>{hasFilters ? 'Nenhum lançamento encontrado' : 'Nenhum lançamento ainda'}</strong>
+              <span>{hasFilters ? 'Ajuste ou limpe os filtros para consultar outros lançamentos.' : 'Use “Novo lançamento” para adicionar a primeira movimentação.'}</span>
+            </div>
+          ) : (
+            <div className="cash-history-table">
+              <div className="cash-history-row cash-history-head">
+                <span>Data</span><span>Responsável</span><span>Descrição</span><span>Tipo</span><span>Valor</span><span />
               </div>
-            ) : (
-              <div className="cash-history-table">
-                <div className="cash-history-row cash-history-head">
-                  <span>Data</span><span>Autor</span><span>Descrição</span><span>Tipo</span><span>Valor</span><span />
-                </div>
-                {entries.map((entry) => (
-                  <div className="cash-history-row" key={entry.id}>
-                    <div data-label="Data">{cashFlowDate(entry.created_at)}</div>
-                    <div data-label="Autor" className="cash-author-cell">{entry.author}</div>
-                    <div data-label="Descrição" className="cash-description-cell">{entry.description}</div>
-                    <div data-label="Tipo">
-                      <span className={`cash-entry-type ${entry.entry_type}`}>
-                        {entry.entry_type === 'entrada' ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
-                        {entry.entry_type === 'entrada' ? 'Entrada' : 'Saída'}
-                      </span>
-                    </div>
-                    <div data-label="Valor" className={`cash-value ${entry.entry_type}`}>
-                      {entry.entry_type === 'entrada' ? '+' : '−'} {money(entry.amount, 'BRL')}
-                    </div>
-                    <div className="cash-actions-cell">
-                      <button
-                        type="button"
-                        aria-label={`Excluir ${entry.description}`}
-                        title="Excluir lançamento"
-                        disabled={deletingId === entry.id}
-                        onClick={() => deleteEntry(entry)}
-                      >
-                        {deletingId === entry.id
-                          ? <LoaderCircle className="spin" size={16} />
-                          : <Trash2 size={16} />}
-                      </button>
-                    </div>
+              {filteredEntries.map((entry) => (
+                <div className="cash-history-row" key={entry.id}>
+                  <div data-label="Data">{cashFlowDate(entry.created_at)}</div>
+                  <div data-label="Responsável" className="cash-responsible-cell">{entry.responsible}</div>
+                  <div data-label="Descrição" className="cash-description-cell">{entry.description}</div>
+                  <div data-label="Tipo">
+                    <span className={`cash-entry-type ${entry.entry_type}`}>
+                      {entry.entry_type === 'entrada' ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
+                      {entry.entry_type === 'entrada' ? 'Entrada' : 'Saída'}
+                    </span>
                   </div>
-                ))}
+                  <div data-label="Valor" className={`cash-value ${entry.entry_type}`}>
+                    {entry.entry_type === 'entrada' ? '+' : '−'} {money(entry.amount, 'BRL')}
+                  </div>
+                  <div className="cash-actions-cell">
+                    <button
+                      type="button"
+                      aria-label={`Excluir ${entry.description}`}
+                      title="Excluir lançamento"
+                      onClick={() => setEntryToDelete(entry)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </article>
+
+      {isEntryModalOpen && (
+        <div className="cash-modal-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !saving) setIsEntryModalOpen(false)
+        }}>
+          <div className="cash-modal" role="dialog" aria-modal="true" aria-labelledby="cash-entry-modal-title">
+            <div className="cash-modal-header">
+              <div><span>Novo lançamento</span><h2 id="cash-entry-modal-title">Adicionar movimentação</h2></div>
+              <button type="button" aria-label="Fechar" disabled={saving} onClick={() => setIsEntryModalOpen(false)}><X size={18} /></button>
+            </div>
+
+            <form className="cash-entry-form" onSubmit={saveEntry}>
+              {message?.type === 'error' && <div className="cash-flow-message error" role="alert">{message.text}</div>}
+              <div className="cash-field">
+                <label htmlFor="cash-responsible">Responsável</label>
+                <select id="cash-responsible" value={form.responsible} onChange={updateCashField('responsible')} required>
+                  <option value="Jonatas">Jonatas</option>
+                  <option value="João Vitor">João Vitor</option>
+                </select>
               </div>
-            )}
+
+              <div className="cash-field">
+                <label htmlFor="cash-amount">Valor</label>
+                <div className="cash-amount-input">
+                  <span>R$</span>
+                  <input id="cash-amount" type="text" inputMode="decimal" value={form.amount} onChange={updateCashField('amount')} placeholder="0,00" autoFocus required />
+                </div>
+              </div>
+
+              <fieldset className="cash-type-field">
+                <legend>Tipo de movimentação</legend>
+                <div className="cash-type-toggle">
+                  <button className={form.entryType === 'entrada' ? 'active income' : ''} type="button" aria-pressed={form.entryType === 'entrada'} onClick={() => setForm((current) => ({ ...current, entryType: 'entrada' }))}>
+                    <ArrowUpRight size={17} /> Entrada
+                  </button>
+                  <button className={form.entryType === 'saida' ? 'active expense' : ''} type="button" aria-pressed={form.entryType === 'saida'} onClick={() => setForm((current) => ({ ...current, entryType: 'saida' }))}>
+                    <ArrowDownLeft size={17} /> Saída
+                  </button>
+                </div>
+              </fieldset>
+
+              <div className="cash-field">
+                <label htmlFor="cash-description">Descrição</label>
+                <textarea id="cash-description" value={form.description} onChange={updateCashField('description')} placeholder="Descreva a origem ou finalidade do valor" rows={4} maxLength={500} required />
+              </div>
+
+              <div className="cash-modal-actions">
+                <button className="cash-modal-cancel" type="button" disabled={saving} onClick={() => setIsEntryModalOpen(false)}>Cancelar</button>
+                <button className="cash-submit-button" type="submit" disabled={saving}>
+                  {saving ? <LoaderCircle className="spin" size={18} /> : <Plus size={18} />}
+                  {saving ? 'Salvando...' : 'Adicionar lançamento'}
+                </button>
+              </div>
+            </form>
           </div>
-        </article>
-      </div>
+        </div>
+      )}
+
+      {entryToDelete && (
+        <div className="cash-modal-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !deleting) setEntryToDelete(null)
+        }}>
+          <div className="cash-modal cash-delete-modal" role="alertdialog" aria-modal="true" aria-labelledby="cash-delete-title" aria-describedby="cash-delete-description">
+            <div className="cash-delete-icon"><Trash2 size={21} /></div>
+            <h2 id="cash-delete-title">Excluir lançamento?</h2>
+            <p id="cash-delete-description">O lançamento “{entryToDelete.description}” será removido permanentemente do fluxo de caixa.</p>
+            {message?.type === 'error' && <div className="cash-flow-message error" role="alert">{message.text}</div>}
+            <div className="cash-delete-details">
+              <span>{entryToDelete.responsible}</span>
+              <strong>{money(entryToDelete.amount, 'BRL')}</strong>
+            </div>
+            <div className="cash-modal-actions">
+              <button className="cash-modal-cancel" type="button" disabled={deleting} onClick={() => setEntryToDelete(null)}>Cancelar</button>
+              <button className="cash-delete-confirm" type="button" disabled={deleting} onClick={deleteEntry}>
+                {deleting ? <LoaderCircle className="spin" size={17} /> : <Trash2 size={17} />}
+                {deleting ? 'Excluindo...' : 'Sim, excluir'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
