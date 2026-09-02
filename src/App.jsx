@@ -5,7 +5,6 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUpRight,
-  Banknote,
   CalendarDays,
   ChartNoAxesCombined,
   Check,
@@ -619,8 +618,6 @@ const emptyCashEntry = {
 }
 
 const emptyCashFilters = {
-  startDate: '',
-  endDate: '',
   entryType: 'all',
   responsible: 'all',
 }
@@ -641,9 +638,12 @@ function parseCashAmount(value) {
 }
 
 function CashFlowPage() {
+  const today = localDateValue()
   const [entries, setEntries] = useState([])
   const [form, setForm] = useState(emptyCashEntry)
   const [filters, setFilters] = useState(emptyCashFilters)
+  const [dateFilters, setDateFilters] = useState({ start: today, end: today })
+  const [appliedDateFilters, setAppliedDateFilters] = useState({ start: today, end: today })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -691,8 +691,7 @@ function CashFlowPage() {
 
   const filteredEntries = entries.filter((entry) => {
     const entryDate = localDateValue(new Date(entry.created_at))
-    if (filters.startDate && entryDate < filters.startDate) return false
-    if (filters.endDate && entryDate > filters.endDate) return false
+    if (entryDate < appliedDateFilters.start || entryDate > appliedDateFilters.end) return false
     if (filters.entryType !== 'all' && entry.entry_type !== filters.entryType) return false
     if (filters.responsible !== 'all' && entry.responsible !== filters.responsible) return false
     return true
@@ -704,7 +703,7 @@ function CashFlowPage() {
     return result
   }, { income: 0, expenses: 0 })
   const balance = totals.income - totals.expenses
-  const hasFilters = Object.values(filters).some((value) => value !== '' && value !== 'all')
+  const hasSecondaryFilters = Object.values(filters).some((value) => value !== 'all')
 
   const updateCashField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))
@@ -713,6 +712,10 @@ function CashFlowPage() {
 
   const updateCashFilter = (field) => (event) => {
     setFilters((current) => ({ ...current, [field]: event.target.value }))
+  }
+
+  const applyCashDateFilters = () => {
+    if (dateFilters.start <= dateFilters.end) setAppliedDateFilters({ ...dateFilters })
   }
 
   const saveEntry = async (event) => {
@@ -767,27 +770,55 @@ function CashFlowPage() {
 
   return (
     <section id="cash-flow" className="dashboard-content cash-flow-page" aria-label="Fluxo de caixa">
-      <header className="dashboard-header cash-flow-header">
+      <header className="dashboard-header">
         <div>
           <span className="dashboard-eyebrow">Controle financeiro</span>
           <h1>Fluxo de caixa</h1>
           <p>Registre entradas e saídas manuais e acompanhe o balanço da operação.</p>
         </div>
-        <span className="cash-flow-reference"><Banknote size={18} /> Lançamentos em BRL</span>
+        <DateRangeFilter
+          filters={dateFilters}
+          appliedFilters={appliedDateFilters}
+          setFilters={setDateFilters}
+          onApply={applyCashDateFilters}
+          loading={loading}
+        />
       </header>
+
+      <div className="cash-filter-bar" aria-label="Filtros adicionais do fluxo de caixa">
+        <div className="cash-filter-field">
+          <label htmlFor="cash-filter-type">Tipo</label>
+          <select id="cash-filter-type" value={filters.entryType} onChange={updateCashFilter('entryType')}>
+            <option value="all">Entradas e saídas</option>
+            <option value="entrada">Entrada</option>
+            <option value="saida">Saída</option>
+          </select>
+        </div>
+        <div className="cash-filter-field">
+          <label htmlFor="cash-filter-responsible">Responsável</label>
+          <select id="cash-filter-responsible" value={filters.responsible} onChange={updateCashFilter('responsible')}>
+            <option value="all">Todos</option>
+            <option value="Jonatas">Jonatas</option>
+            <option value="João Vitor">João Vitor</option>
+          </select>
+        </div>
+        <button className="cash-clear-filters" type="button" disabled={!hasSecondaryFilters} onClick={() => setFilters(emptyCashFilters)}>
+          Limpar filtros
+        </button>
+      </div>
 
       <div className="cash-summary-grid">
         <article className="cash-summary-card income">
           <span><ArrowUpRight size={20} /></span>
-          <div><small>{hasFilters ? 'Entradas filtradas' : 'Total de entradas'}</small><strong>{money(totals.income, 'BRL')}</strong></div>
+          <div><small>Entradas no período</small><strong>{money(totals.income, 'BRL')}</strong></div>
         </article>
         <article className="cash-summary-card expense">
           <span><ArrowDownLeft size={20} /></span>
-          <div><small>{hasFilters ? 'Saídas filtradas' : 'Total de saídas'}</small><strong>{money(totals.expenses, 'BRL')}</strong></div>
+          <div><small>Saídas no período</small><strong>{money(totals.expenses, 'BRL')}</strong></div>
         </article>
         <article className={`cash-summary-card balance${balance < 0 ? ' negative' : ''}`}>
           <span><WalletCards size={20} /></span>
-          <div><small>{hasFilters ? 'Saldo filtrado' : 'Saldo atual'}</small><strong>{money(balance, 'BRL')}</strong></div>
+          <div><small>Saldo do período</small><strong>{money(balance, 'BRL')}</strong></div>
         </article>
       </div>
 
@@ -809,39 +840,9 @@ function CashFlowPage() {
           </button>
         </div>
 
-        <div className="cash-filter-bar" aria-label="Filtros do fluxo de caixa">
-          <div className="cash-filter-field">
-            <label htmlFor="cash-filter-start">Data inicial</label>
-            <input id="cash-filter-start" type="date" value={filters.startDate} max={filters.endDate || undefined} onChange={updateCashFilter('startDate')} />
-          </div>
-          <div className="cash-filter-field">
-            <label htmlFor="cash-filter-end">Data final</label>
-            <input id="cash-filter-end" type="date" value={filters.endDate} min={filters.startDate || undefined} onChange={updateCashFilter('endDate')} />
-          </div>
-          <div className="cash-filter-field">
-            <label htmlFor="cash-filter-type">Tipo</label>
-            <select id="cash-filter-type" value={filters.entryType} onChange={updateCashFilter('entryType')}>
-              <option value="all">Entradas e saídas</option>
-              <option value="entrada">Entrada</option>
-              <option value="saida">Saída</option>
-            </select>
-          </div>
-          <div className="cash-filter-field">
-            <label htmlFor="cash-filter-responsible">Responsável</label>
-            <select id="cash-filter-responsible" value={filters.responsible} onChange={updateCashFilter('responsible')}>
-              <option value="all">Todos</option>
-              <option value="Jonatas">Jonatas</option>
-              <option value="João Vitor">João Vitor</option>
-            </select>
-          </div>
-          <button className="cash-clear-filters" type="button" disabled={!hasFilters} onClick={() => setFilters(emptyCashFilters)}>
-            Limpar filtros
-          </button>
-        </div>
-
         <div className="cash-results-summary">
           <span>{filteredEntries.length} {filteredEntries.length === 1 ? 'lançamento encontrado' : 'lançamentos encontrados'}</span>
-          {hasFilters && <b>Balanço do período filtrado</b>}
+          <b>{periodLabel(appliedDateFilters)}</b>
         </div>
 
         <div className="cash-history-scroll">
@@ -850,8 +851,8 @@ function CashFlowPage() {
           ) : filteredEntries.length === 0 ? (
             <div className="cash-empty-state">
               <WalletCards size={30} />
-              <strong>{hasFilters ? 'Nenhum lançamento encontrado' : 'Nenhum lançamento ainda'}</strong>
-              <span>{hasFilters ? 'Ajuste ou limpe os filtros para consultar outros lançamentos.' : 'Use “Novo lançamento” para adicionar a primeira movimentação.'}</span>
+              <strong>Nenhum lançamento encontrado</strong>
+              <span>Ajuste o período ou os filtros para consultar outros lançamentos.</span>
             </div>
           ) : (
             <div className="cash-history-table">
