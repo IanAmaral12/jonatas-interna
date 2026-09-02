@@ -911,7 +911,7 @@ function CashFlowPage() {
 
               <div className="cash-field">
                 <label htmlFor="cash-amount">Valor</label>
-                <div className="cash-amount-input">
+                <div className={`cash-amount-input ${form.entryType}`}>
                   <span>R$</span>
                   <input id="cash-amount" type="text" inputMode="decimal" value={form.amount} onChange={updateCashField('amount')} placeholder="0,00" autoFocus required />
                 </div>

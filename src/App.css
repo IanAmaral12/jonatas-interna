@@ -182,10 +182,16 @@ form { display: grid; gap: 18px; }
 .cash-summary-card > div { min-width: 0; display: grid; gap: 8px; }
 .cash-summary-card small { color: var(--muted); font-size: 11px; font-weight: 700; }
 .cash-summary-card strong { overflow: hidden; color: var(--ink); font: 750 clamp(20px, 2vw, 27px)/1 'Manrope', sans-serif; letter-spacing: -.8px; text-overflow: ellipsis; white-space: nowrap; }
+.cash-summary-card.income { border-color: var(--cash-positive-border); background: linear-gradient(135deg, var(--surface), var(--cash-positive-bg)); }
+.cash-summary-card.income > span, .cash-summary-card.balance:not(.negative) > span { color: var(--cash-positive); border-color: var(--cash-positive-border); background: var(--cash-positive-bg); }
+.cash-summary-card.income strong, .cash-summary-card.balance:not(.negative) strong { color: var(--cash-positive); }
+.cash-summary-card.expense { border-color: var(--error-border); background: linear-gradient(135deg, var(--surface), var(--error-bg)); }
 .cash-summary-card.expense > span { color: var(--error-text); border-color: var(--error-border); background: var(--error-bg); }
-.cash-summary-card.balance { border-color: rgba(255,122,26,.3); background: linear-gradient(135deg, var(--surface), var(--orange-soft)); }
+.cash-summary-card.expense strong { color: var(--error-text); }
+.cash-summary-card.balance { border-color: var(--cash-positive-border); background: linear-gradient(135deg, var(--surface), var(--cash-positive-bg)); }
 .cash-summary-card.balance.negative { border-color: var(--error-border); background: linear-gradient(135deg, var(--surface), var(--error-bg)); }
 .cash-summary-card.balance.negative > span { color: var(--error-text); border-color: var(--error-border); background: var(--error-bg); }
+.cash-summary-card.balance.negative strong { color: var(--error-text); }
 .cash-flow-message { margin-top: 16px; padding: 12px 14px; border-radius: 11px; font-size: 12px; font-weight: 650; }
 .cash-flow-message.error { color: var(--error-text); border: 1px solid var(--error-border); background: var(--error-bg); }
 .cash-flow-message.success { color: var(--success-text); border: 1px solid var(--success-border); background: var(--success-bg); }
@@ -201,13 +207,17 @@ form { display: grid; gap: 18px; }
 .cash-field input::placeholder, .cash-field textarea::placeholder { color: var(--muted); opacity: .7; }
 .cash-field input:focus, .cash-field textarea:focus, .cash-field select:focus { border-color: var(--orange); background: var(--surface); box-shadow: 0 0 0 3px rgba(255,122,26,.14); }
 .cash-amount-input { position: relative; }
-.cash-amount-input > span { position: absolute; z-index: 1; left: 13px; top: 50%; color: var(--orange-dark); font-size: 12px; font-weight: 800; transform: translateY(-50%); }
+.cash-amount-input > span { position: absolute; z-index: 1; left: 13px; top: 50%; font-size: 12px; font-weight: 800; transform: translateY(-50%); }
 .cash-amount-input input { padding-left: 40px; }
+.cash-amount-input.entrada > span, .cash-amount-input.entrada input { color: var(--cash-positive); }
+.cash-amount-input.entrada input:focus { border-color: var(--cash-positive); box-shadow: 0 0 0 3px var(--cash-positive-bg); }
+.cash-amount-input.saida > span, .cash-amount-input.saida input { color: var(--error-text); }
+.cash-amount-input.saida input:focus { border-color: var(--error-text); box-shadow: 0 0 0 3px var(--error-bg); }
 .cash-type-field { min-width: 0; display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
 .cash-type-toggle { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .cash-type-toggle button { min-height: 43px; display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--muted); border: 1px solid var(--border); border-radius: 10px; background: var(--surface-subtle); font-size: 12px; font-weight: 750; transition: color .2s, border-color .2s, background .2s; }
 .cash-type-toggle button:hover { color: var(--ink); border-color: var(--border-strong); }
-.cash-type-toggle button.active.income { color: var(--orange-dark); border-color: rgba(255,122,26,.4); background: var(--orange-soft); }
+.cash-type-toggle button.active.income { color: var(--cash-positive); border-color: var(--cash-positive-border); background: var(--cash-positive-bg); }
 .cash-type-toggle button.active.expense { color: var(--error-text); border-color: var(--error-border); background: var(--error-bg); }
 .cash-submit-button { min-height: 47px; display: flex; align-items: center; justify-content: center; gap: 9px; color: #211005; border: 0; border-radius: 11px; background: linear-gradient(135deg, #ff9a47, #ff7412); box-shadow: 0 9px 22px rgba(232,93,4,.22); font-size: 13px; font-weight: 800; transition: transform .2s, box-shadow .2s; }
 .cash-submit-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 27px rgba(232,93,4,.3); }
@@ -231,10 +241,10 @@ form { display: grid; gap: 18px; }
 .cash-responsible-cell, .cash-description-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cash-responsible-cell { font-weight: 700; }
 .cash-entry-type { width: fit-content; display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; border-radius: 8px; font-size: 10px; font-weight: 800; }
-.cash-entry-type.entrada { color: var(--orange-dark); background: var(--orange-soft); }
+.cash-entry-type.entrada { color: var(--cash-positive); background: var(--cash-positive-bg); }
 .cash-entry-type.saida { color: var(--error-text); background: var(--error-bg); }
 .cash-value { font-weight: 800; white-space: nowrap; }
-.cash-value.entrada { color: var(--orange-dark); }
+.cash-value.entrada { color: var(--cash-positive); }
 .cash-value.saida { color: var(--error-text); }
 .cash-actions-cell { display: flex; justify-content: flex-end; }
 .cash-actions-cell button { width: 33px; height: 33px; display: grid; place-items: center; padding: 0; color: var(--muted); border: 1px solid transparent; border-radius: 8px; background: transparent; }

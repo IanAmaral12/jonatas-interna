@@ -25,6 +25,9 @@
   --success-text: #994006;
   --success-bg: #fff5ed;
   --success-border: #ffcfaa;
+  --cash-positive: #147a43;
+  --cash-positive-bg: #eaf8ef;
+  --cash-positive-border: #b7e2c7;
   color-scheme: light;
 }
 
@@ -46,6 +49,9 @@ html[data-theme='dark'] {
   --success-text: #ffb47c;
   --success-bg: #28180e;
   --success-border: #603313;
+  --cash-positive: #6fe3a0;
+  --cash-positive-bg: rgba(38, 177, 97, .14);
+  --cash-positive-border: rgba(91, 218, 144, .32);
   color-scheme: dark;
 }
 
