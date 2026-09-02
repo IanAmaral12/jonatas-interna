@@ -781,7 +781,6 @@ function CashFlowPage() {
       setEntries((current) => [{ ...data, amount: Number(data.amount) }, ...current])
       setForm(emptyCashEntry)
       setIsEntryModalOpen(false)
-      setMessage({ type: 'success', text: 'Lançamento adicionado ao fluxo de caixa.' })
     }
     setSaving(false)
   }
