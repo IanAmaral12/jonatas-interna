@@ -12,6 +12,7 @@ import {
   CircleDollarSign,
   Eye,
   EyeOff,
+  Filter,
   LayoutDashboard,
   LoaderCircle,
   LockKeyhole,
@@ -638,16 +639,19 @@ function parseCashAmount(value) {
 }
 
 function CashFlowPage() {
+  const filterMenuRef = useRef(null)
   const today = localDateValue()
   const [entries, setEntries] = useState([])
   const [form, setForm] = useState(emptyCashEntry)
   const [filters, setFilters] = useState(emptyCashFilters)
+  const [draftFilters, setDraftFilters] = useState(emptyCashFilters)
   const [dateFilters, setDateFilters] = useState({ start: today, end: today })
   const [appliedDateFilters, setAppliedDateFilters] = useState({ start: today, end: today })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false)
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false)
   const [entryToDelete, setEntryToDelete] = useState(null)
   const [message, setMessage] = useState(null)
 
@@ -689,6 +693,21 @@ function CashFlowPage() {
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [deleting, entryToDelete, isEntryModalOpen, saving])
 
+  useEffect(() => {
+    if (!isFilterMenuOpen) return undefined
+    const closeFilterMenu = (event) => {
+      if (event.type === 'keydown' && event.key !== 'Escape') return
+      if (event.type === 'pointerdown' && filterMenuRef.current?.contains(event.target)) return
+      setIsFilterMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeFilterMenu)
+    window.addEventListener('keydown', closeFilterMenu)
+    return () => {
+      document.removeEventListener('pointerdown', closeFilterMenu)
+      window.removeEventListener('keydown', closeFilterMenu)
+    }
+  }, [isFilterMenuOpen])
+
   const filteredEntries = entries.filter((entry) => {
     const entryDate = localDateValue(new Date(entry.created_at))
     if (entryDate < appliedDateFilters.start || entryDate > appliedDateFilters.end) return false
@@ -704,6 +723,7 @@ function CashFlowPage() {
   }, { income: 0, expenses: 0 })
   const balance = totals.income - totals.expenses
   const hasSecondaryFilters = Object.values(filters).some((value) => value !== 'all')
+  const activeFilterCount = Object.values(filters).filter((value) => value !== 'all').length
 
   const updateCashField = (field) => (event) => {
     setForm((current) => ({ ...current, [field]: event.target.value }))
@@ -711,11 +731,27 @@ function CashFlowPage() {
   }
 
   const updateCashFilter = (field) => (event) => {
-    setFilters((current) => ({ ...current, [field]: event.target.value }))
+    setDraftFilters((current) => ({ ...current, [field]: event.target.value }))
   }
 
   const applyCashDateFilters = () => {
     if (dateFilters.start <= dateFilters.end) setAppliedDateFilters({ ...dateFilters })
+  }
+
+  const toggleFilterMenu = () => {
+    setDraftFilters({ ...filters })
+    setIsFilterMenuOpen((current) => !current)
+  }
+
+  const applySecondaryFilters = () => {
+    setFilters({ ...draftFilters })
+    setIsFilterMenuOpen(false)
+  }
+
+  const clearSecondaryFilters = () => {
+    setDraftFilters(emptyCashFilters)
+    setFilters(emptyCashFilters)
+    setIsFilterMenuOpen(false)
   }
 
   const saveEntry = async (event) => {
@@ -785,28 +821,6 @@ function CashFlowPage() {
         />
       </header>
 
-      <div className="cash-filter-bar" aria-label="Filtros adicionais do fluxo de caixa">
-        <div className="cash-filter-field">
-          <label htmlFor="cash-filter-type">Tipo</label>
-          <select id="cash-filter-type" value={filters.entryType} onChange={updateCashFilter('entryType')}>
-            <option value="all">Entradas e saídas</option>
-            <option value="entrada">Entrada</option>
-            <option value="saida">Saída</option>
-          </select>
-        </div>
-        <div className="cash-filter-field">
-          <label htmlFor="cash-filter-responsible">Responsável</label>
-          <select id="cash-filter-responsible" value={filters.responsible} onChange={updateCashFilter('responsible')}>
-            <option value="all">Todos</option>
-            <option value="Jonatas">Jonatas</option>
-            <option value="João Vitor">João Vitor</option>
-          </select>
-        </div>
-        <button className="cash-clear-filters" type="button" disabled={!hasSecondaryFilters} onClick={() => setFilters(emptyCashFilters)}>
-          Limpar filtros
-        </button>
-      </div>
-
       <div className="cash-summary-grid">
         <article className="cash-summary-card income">
           <span><ArrowUpRight size={20} /></span>
@@ -827,17 +841,63 @@ function CashFlowPage() {
       <article className="cash-history-panel">
         <div className="cash-panel-heading cash-history-heading">
           <div><span>Movimentações</span><h2>Histórico de lançamentos</h2></div>
-          <button
-            className="cash-new-entry-button"
-            type="button"
-            onClick={() => {
-              setForm(emptyCashEntry)
-              setMessage(null)
-              setIsEntryModalOpen(true)
-            }}
-          >
-            <Plus size={17} /> Novo lançamento
-          </button>
+          <div className="cash-table-actions">
+            <div className="cash-filter-menu-wrapper" ref={filterMenuRef}>
+              <button
+                className={`cash-filter-trigger${hasSecondaryFilters ? ' active' : ''}`}
+                type="button"
+                aria-expanded={isFilterMenuOpen}
+                aria-controls="cash-filter-menu"
+                onClick={toggleFilterMenu}
+              >
+                <Filter size={16} /> Filtrar
+                {activeFilterCount > 0 && <span>{activeFilterCount}</span>}
+              </button>
+
+              {isFilterMenuOpen && (
+                <div className="cash-filter-popover" id="cash-filter-menu">
+                  <div className="cash-filter-popover-header">
+                    <div><small>Refinar resultados</small><strong>Filtros</strong></div>
+                    <button type="button" aria-label="Fechar filtros" onClick={() => setIsFilterMenuOpen(false)}><X size={16} /></button>
+                  </div>
+                  <div className="cash-filter-popover-body">
+                    <div className="cash-filter-field">
+                      <label htmlFor="cash-filter-type">Tipo</label>
+                      <select id="cash-filter-type" value={draftFilters.entryType} onChange={updateCashFilter('entryType')}>
+                        <option value="all">Entradas e saídas</option>
+                        <option value="entrada">Entrada</option>
+                        <option value="saida">Saída</option>
+                      </select>
+                    </div>
+                    <div className="cash-filter-field">
+                      <label htmlFor="cash-filter-responsible">Responsável</label>
+                      <select id="cash-filter-responsible" value={draftFilters.responsible} onChange={updateCashFilter('responsible')}>
+                        <option value="all">Todos</option>
+                        <option value="Jonatas">Jonatas</option>
+                        <option value="João Vitor">João Vitor</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="cash-filter-popover-actions">
+                    <button className="cash-clear-filters" type="button" disabled={!hasSecondaryFilters && Object.values(draftFilters).every((value) => value === 'all')} onClick={clearSecondaryFilters}>Limpar</button>
+                    <button className="cash-apply-filters" type="button" onClick={applySecondaryFilters}>Aplicar filtros</button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              className="cash-new-entry-button"
+              type="button"
+              onClick={() => {
+                setForm(emptyCashEntry)
+                setMessage(null)
+                setIsEntryModalOpen(true)
+              }}
+            >
+              <Plus size={17} /> Novo lançamento
+            </button>
+          </div>
         </div>
 
         <div className="cash-results-summary">
