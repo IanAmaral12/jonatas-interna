@@ -1044,6 +1044,20 @@ function App() {
   }, [theme])
 
   useEffect(() => {
+    if (session && mode !== 'update-password') {
+      document.title = 'Nutra X1'
+      return
+    }
+
+    const pageTitles = {
+      login: 'Nutra X1 — Acesse sua conta',
+      forgot: 'Nutra X1 — Recupere seu acesso',
+      'update-password': 'Nutra X1 — Crie uma nova senha',
+    }
+    document.title = pageTitles[mode] || 'Nutra X1'
+  }, [mode, session])
+
+  useEffect(() => {
     if (!supabase) {
       return undefined
     }
