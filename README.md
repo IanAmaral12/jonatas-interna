@@ -137,3 +137,12 @@ Para ativar a integração, cadastre `META_ACCESS_TOKEN_1` e `META_ACCESS_TOKEN_
 ```
 
 O script publica a função, executa a primeira sincronização e agenda novas coletas a cada 10 minutos. Tokens nunca devem ser adicionados ao Git ou expostos em variáveis `VITE_*`.
+
+### Fluxo de caixa
+
+A página **Fluxo de caixa** permite que usuários autenticados cadastrem
+manualmente entradas e saídas em BRL. Cada lançamento registra autor, valor,
+descrição, tipo, data automática e o usuário do Supabase responsável pela criação.
+
+Os dados ficam em `cash_flow_entries`, protegidos por RLS. O frontend mostra o
+total de entradas, total de saídas, saldo atual e o histórico dos lançamentos.

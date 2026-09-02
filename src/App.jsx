@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
+  ArrowDownLeft,
   ArrowLeft,
   ArrowRight,
+  ArrowUpRight,
+  Banknote,
   CalendarDays,
   ChartNoAxesCombined,
   Check,
@@ -16,13 +19,16 @@ import {
   LogOut,
   Mail,
   Moon,
+  Plus,
   ReceiptText,
   ShieldCheck,
   Sparkles,
   Sun,
   Target,
+  Trash2,
   TrendingDown,
   Users,
+  WalletCards,
 } from 'lucide-react'
 import { DayPicker } from '@daypicker/react'
 import { ptBR } from '@daypicker/react/locale'
@@ -604,20 +610,317 @@ function Dashboard({ theme }) {
   )
 }
 
+const emptyCashEntry = {
+  author: '',
+  amount: '',
+  description: '',
+  entryType: 'entrada',
+}
+
+function cashFlowDate(value) {
+  if (!value) return '—'
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(new Date(value))
+}
+
+function parseCashAmount(value) {
+  const normalized = value.trim().replace(/\s/g, '')
+  return Number(normalized.includes(',')
+    ? normalized.replace(/\./g, '').replace(',', '.')
+    : normalized)
+}
+
+function CashFlowPage() {
+  const [entries, setEntries] = useState([])
+  const [form, setForm] = useState(emptyCashEntry)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState(null)
+  const [message, setMessage] = useState(null)
+
+  useEffect(() => {
+    let active = true
+
+    const loadEntries = async () => {
+      setLoading(true)
+      const { data, error } = await supabase
+        .from('cash_flow_entries')
+        .select('id,author,amount,description,entry_type,created_at')
+        .order('created_at', { ascending: false })
+
+      if (!active) return
+      if (error) {
+        setMessage({ type: 'error', text: 'Não foi possível carregar o fluxo de caixa.' })
+        setEntries([])
+      } else {
+        setEntries((data || []).map((entry) => ({
+          ...entry,
+          amount: Number(entry.amount),
+        })))
+      }
+      setLoading(false)
+    }
+
+    loadEntries()
+    return () => { active = false }
+  }, [])
+
+  const totals = entries.reduce((result, entry) => {
+    if (entry.entry_type === 'entrada') result.income += entry.amount
+    if (entry.entry_type === 'saida') result.expenses += entry.amount
+    return result
+  }, { income: 0, expenses: 0 })
+  const balance = totals.income - totals.expenses
+
+  const updateCashField = (field) => (event) => {
+    setForm((current) => ({ ...current, [field]: event.target.value }))
+    if (message) setMessage(null)
+  }
+
+  const saveEntry = async (event) => {
+    event.preventDefault()
+    const amount = parseCashAmount(form.amount)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage({ type: 'error', text: 'Informe um valor maior que zero.' })
+      return
+    }
+
+    setSaving(true)
+    setMessage(null)
+    const { data, error } = await supabase
+      .from('cash_flow_entries')
+      .insert({
+        author: form.author.trim(),
+        amount,
+        description: form.description.trim(),
+        entry_type: form.entryType,
+      })
+      .select('id,author,amount,description,entry_type,created_at')
+      .single()
+
+    if (error) {
+      setMessage({ type: 'error', text: 'Não foi possível salvar o lançamento.' })
+    } else {
+      setEntries((current) => [{ ...data, amount: Number(data.amount) }, ...current])
+      setForm(emptyCashEntry)
+      setMessage({ type: 'success', text: 'Lançamento adicionado ao fluxo de caixa.' })
+    }
+    setSaving(false)
+  }
+
+  const deleteEntry = async (entry) => {
+    const confirmed = window.confirm(`Excluir o lançamento “${entry.description}”?`)
+    if (!confirmed) return
+
+    setDeletingId(entry.id)
+    setMessage(null)
+    const { error } = await supabase.from('cash_flow_entries').delete().eq('id', entry.id)
+    if (error) {
+      setMessage({ type: 'error', text: 'Não foi possível excluir o lançamento.' })
+    } else {
+      setEntries((current) => current.filter((item) => item.id !== entry.id))
+      setMessage({ type: 'success', text: 'Lançamento excluído.' })
+    }
+    setDeletingId(null)
+  }
+
+  return (
+    <section id="cash-flow" className="dashboard-content cash-flow-page" aria-label="Fluxo de caixa">
+      <header className="dashboard-header cash-flow-header">
+        <div>
+          <span className="dashboard-eyebrow">Controle financeiro</span>
+          <h1>Fluxo de caixa</h1>
+          <p>Registre entradas e saídas manuais e acompanhe o balanço da operação.</p>
+        </div>
+        <span className="cash-flow-reference"><Banknote size={18} /> Lançamentos em BRL</span>
+      </header>
+
+      <div className="cash-summary-grid">
+        <article className="cash-summary-card income">
+          <span><ArrowUpRight size={20} /></span>
+          <div><small>Total de entradas</small><strong>{money(totals.income, 'BRL')}</strong></div>
+        </article>
+        <article className="cash-summary-card expense">
+          <span><ArrowDownLeft size={20} /></span>
+          <div><small>Total de saídas</small><strong>{money(totals.expenses, 'BRL')}</strong></div>
+        </article>
+        <article className={`cash-summary-card balance${balance < 0 ? ' negative' : ''}`}>
+          <span><WalletCards size={20} /></span>
+          <div><small>Saldo atual</small><strong>{money(balance, 'BRL')}</strong></div>
+        </article>
+      </div>
+
+      {message && <div className={`cash-flow-message ${message.type}`} role="status">{message.text}</div>}
+
+      <div className="cash-flow-grid">
+        <article className="cash-entry-panel">
+          <div className="cash-panel-heading">
+            <span>Novo lançamento</span>
+            <h2>Adicionar movimentação</h2>
+          </div>
+
+          <form className="cash-entry-form" onSubmit={saveEntry}>
+            <div className="cash-field">
+              <label htmlFor="cash-author">Autor</label>
+              <input
+                id="cash-author"
+                type="text"
+                value={form.author}
+                onChange={updateCashField('author')}
+                placeholder="Nome de quem registrou"
+                maxLength={120}
+                required
+              />
+            </div>
+
+            <div className="cash-field">
+              <label htmlFor="cash-amount">Valor</label>
+              <div className="cash-amount-input">
+                <span>R$</span>
+                <input
+                  id="cash-amount"
+                  type="text"
+                  inputMode="decimal"
+                  value={form.amount}
+                  onChange={updateCashField('amount')}
+                  placeholder="0,00"
+                  required
+                />
+              </div>
+            </div>
+
+            <fieldset className="cash-type-field">
+              <legend>Tipo de movimentação</legend>
+              <div className="cash-type-toggle">
+                <button
+                  className={form.entryType === 'entrada' ? 'active income' : ''}
+                  type="button"
+                  aria-pressed={form.entryType === 'entrada'}
+                  onClick={() => setForm((current) => ({ ...current, entryType: 'entrada' }))}
+                >
+                  <ArrowUpRight size={17} /> Entrada
+                </button>
+                <button
+                  className={form.entryType === 'saida' ? 'active expense' : ''}
+                  type="button"
+                  aria-pressed={form.entryType === 'saida'}
+                  onClick={() => setForm((current) => ({ ...current, entryType: 'saida' }))}
+                >
+                  <ArrowDownLeft size={17} /> Saída
+                </button>
+              </div>
+            </fieldset>
+
+            <div className="cash-field">
+              <label htmlFor="cash-description">Descrição</label>
+              <textarea
+                id="cash-description"
+                value={form.description}
+                onChange={updateCashField('description')}
+                placeholder="Descreva a origem ou finalidade do valor"
+                rows={4}
+                maxLength={500}
+                required
+              />
+            </div>
+
+            <button className="cash-submit-button" type="submit" disabled={saving}>
+              {saving ? <LoaderCircle className="spin" size={18} /> : <Plus size={18} />}
+              {saving ? 'Salvando...' : 'Adicionar lançamento'}
+            </button>
+          </form>
+        </article>
+
+        <article className="cash-history-panel">
+          <div className="cash-panel-heading cash-history-heading">
+            <div><span>Movimentações</span><h2>Histórico de lançamentos</h2></div>
+            <b>{entries.length} {entries.length === 1 ? 'registro' : 'registros'}</b>
+          </div>
+
+          <div className="cash-history-scroll">
+            {loading ? (
+              <div className="cash-empty-state"><LoaderCircle className="spin" size={24} />Carregando lançamentos...</div>
+            ) : entries.length === 0 ? (
+              <div className="cash-empty-state">
+                <WalletCards size={30} />
+                <strong>Nenhum lançamento ainda</strong>
+                <span>Adicione a primeira entrada ou saída usando o formulário.</span>
+              </div>
+            ) : (
+              <div className="cash-history-table">
+                <div className="cash-history-row cash-history-head">
+                  <span>Data</span><span>Autor</span><span>Descrição</span><span>Tipo</span><span>Valor</span><span />
+                </div>
+                {entries.map((entry) => (
+                  <div className="cash-history-row" key={entry.id}>
+                    <div data-label="Data">{cashFlowDate(entry.created_at)}</div>
+                    <div data-label="Autor" className="cash-author-cell">{entry.author}</div>
+                    <div data-label="Descrição" className="cash-description-cell">{entry.description}</div>
+                    <div data-label="Tipo">
+                      <span className={`cash-entry-type ${entry.entry_type}`}>
+                        {entry.entry_type === 'entrada' ? <ArrowUpRight size={14} /> : <ArrowDownLeft size={14} />}
+                        {entry.entry_type === 'entrada' ? 'Entrada' : 'Saída'}
+                      </span>
+                    </div>
+                    <div data-label="Valor" className={`cash-value ${entry.entry_type}`}>
+                      {entry.entry_type === 'entrada' ? '+' : '−'} {money(entry.amount, 'BRL')}
+                    </div>
+                    <div className="cash-actions-cell">
+                      <button
+                        type="button"
+                        aria-label={`Excluir ${entry.description}`}
+                        title="Excluir lançamento"
+                        disabled={deletingId === entry.id}
+                        onClick={() => deleteEntry(entry)}
+                      >
+                        {deletingId === entry.id
+                          ? <LoaderCircle className="spin" size={16} />
+                          : <Trash2 size={16} />}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </article>
+      </div>
+    </section>
+  )
+}
+
 function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
+  const [activePage, setActivePage] = useState('dashboard')
+
   return (
     <main className="dashboard-shell">
       <aside className="app-sidebar">
-        <a className="brand dark-brand sidebar-brand" href="#dashboard" aria-label="Nutra X1 - dashboard">
+        <a className="brand dark-brand sidebar-brand" href="#dashboard" aria-label="Nutra X1 - dashboard" onClick={() => setActivePage('dashboard')}>
           <BrandMark />
           <span>Nutra X1</span>
         </a>
 
         <nav className="sidebar-nav" aria-label="Navegação principal">
-          <a className="sidebar-nav-item active" href="#dashboard" aria-current="page">
+          <button
+            className={`sidebar-nav-item${activePage === 'dashboard' ? ' active' : ''}`}
+            type="button"
+            aria-current={activePage === 'dashboard' ? 'page' : undefined}
+            onClick={() => setActivePage('dashboard')}
+          >
             <LayoutDashboard size={19} />
             <span>Dashboard</span>
-          </a>
+          </button>
+          <button
+            className={`sidebar-nav-item${activePage === 'cash-flow' ? ' active' : ''}`}
+            type="button"
+            aria-current={activePage === 'cash-flow' ? 'page' : undefined}
+            onClick={() => setActivePage('cash-flow')}
+          >
+            <WalletCards size={19} />
+            <span>Fluxo de caixa</span>
+          </button>
         </nav>
 
         <div className="sidebar-controls">
@@ -632,7 +935,7 @@ function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
         </div>
       </aside>
 
-      <Dashboard theme={theme} />
+      {activePage === 'dashboard' ? <Dashboard theme={theme} /> : <CashFlowPage />}
     </main>
   )
 }
