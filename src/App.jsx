@@ -35,7 +35,6 @@ import { DayPicker } from '@daypicker/react'
 import { ptBR } from '@daypicker/react/locale'
 import '@daypicker/react/style.css'
 import {
-  BarElement,
   CategoryScale,
   Chart as ChartJS,
   Legend,
@@ -44,11 +43,11 @@ import {
   PointElement,
   Tooltip,
 } from 'chart.js'
-import { Bar, Line } from 'react-chartjs-2'
+import { Line } from 'react-chartjs-2'
 import { supabase, supabaseConfigError } from './lib/supabase'
 import './App.css'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Tooltip, Legend)
 
 const salesMilestonePlugin = {
   id: 'salesMilestones',
@@ -265,6 +264,22 @@ const milestoneTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
   hourCycle: 'h23',
   timeZone: 'America/Sao_Paulo',
 })
+const zonedCompactDateFormatter = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: '2-digit',
+  timeZone: 'America/Sao_Paulo',
+})
+const zonedWeekdayDateFormatter = new Intl.DateTimeFormat('pt-BR', {
+  weekday: 'short',
+  day: '2-digit',
+  month: '2-digit',
+  timeZone: 'America/Sao_Paulo',
+})
+const zonedMonthYearFormatter = new Intl.DateTimeFormat('pt-BR', {
+  month: 'short',
+  year: 'numeric',
+  timeZone: 'America/Sao_Paulo',
+})
 
 function periodLabel(filters) {
   const start = dateFromValue(filters.start)
@@ -479,6 +494,27 @@ function comparisonModeFor(filters) {
   return includesFullCalendarMonth(filters) ? 'month_days' : 'week_days'
 }
 
+function sellerComparisonModeFor(filters) {
+  const days = selectedDays(filters)
+  if (days === 1) return 'seller_hours'
+  if (days <= 7) return 'seller_days'
+  return includesFullCalendarMonth(filters) ? 'seller_months' : 'seller_weeks'
+}
+
+function sellerComparisonBucketLabel(mode, bucketStart) {
+  const date = new Date(bucketStart)
+  if (mode === 'seller_hours') return milestoneTimeFormatter.format(date)
+  if (mode === 'seller_days') {
+    const label = zonedWeekdayDateFormatter.format(date).replace('.', '')
+    return `${label.charAt(0).toUpperCase()}${label.slice(1)}`
+  }
+  if (mode === 'seller_weeks') {
+    const end = new Date(date.getTime() + 6 * 86400000)
+    return `${zonedCompactDateFormatter.format(date)} – ${zonedCompactDateFormatter.format(end)}`
+  }
+  return zonedMonthYearFormatter.format(date).replace('.', '')
+}
+
 function comparisonSeriesLabel(mode, startValue) {
   const start = dateFromValue(startValue)
   if (!start) return startValue
@@ -505,6 +541,7 @@ function Dashboard({ theme }) {
   const [appliedFilters, setAppliedFilters] = useState({ start: today, end: today })
   const [rows, setRows] = useState([])
   const [timelineRows, setTimelineRows] = useState([])
+  const [sellerTimelineRows, setSellerTimelineRows] = useState([])
   const [sellerOptions, setSellerOptions] = useState([])
   const [appliedSellerId, setAppliedSellerId] = useState('all')
   const [draftSellerId, setDraftSellerId] = useState('all')
@@ -512,6 +549,7 @@ function Dashboard({ theme }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [timelineError, setTimelineError] = useState('')
+  const [sellerTimelineError, setSellerTimelineError] = useState('')
   const currency = 'BRL'
 
   useEffect(() => {
@@ -544,15 +582,21 @@ function Dashboard({ theme }) {
       setLoading(true)
       setError('')
       setTimelineError('')
+      setSellerTimelineError('')
       const queryParams = {
         p_start_date: appliedFilters.start,
         p_end_date: appliedFilters.end,
       }
-      const [metricsResult, timelineResult] = await Promise.all([
+      const sellerId = appliedSellerId === 'all' ? null : appliedSellerId
+      const [metricsResult, timelineResult, sellerTimelineResult] = await Promise.all([
         supabase.rpc('get_cpa_dashboard', queryParams),
         supabase.rpc('get_orders_sales_timeline', {
           ...queryParams,
-          p_seller_id: appliedSellerId === 'all' ? null : appliedSellerId,
+          p_seller_id: sellerId,
+        }),
+        supabase.rpc('get_seller_sales_timeline', {
+          ...queryParams,
+          p_seller_id: sellerId,
         }),
       ])
 
@@ -585,6 +629,15 @@ function Dashboard({ theme }) {
           ...row,
           sales: Number(row.sales || 0),
           bucket_index: Number(row.bucket_index),
+        })))
+      }
+      if (sellerTimelineResult.error) {
+        setSellerTimelineError('Não foi possível carregar o comparativo por vendedor.')
+        setSellerTimelineRows([])
+      } else {
+        setSellerTimelineRows((sellerTimelineResult.data || []).map((row) => ({
+          ...row,
+          sales: Number(row.sales || 0),
         })))
       }
       setLoading(false)
@@ -620,10 +673,6 @@ function Dashboard({ theme }) {
       return first.cpa - second.cpa
     })
     .filter((row) => row.cpa !== null)
-  const appointmentRanking = scopedCurrencyRows
-    .filter((row) => row.seller_id && row.appointments > 0)
-    .sort((first, second) => second.appointments - first.appointments
-      || first.seller_name.localeCompare(second.seller_name, 'pt-BR'))
   const commercialRows = scopedCurrencyRows
     .filter((row) => row.seller_id)
     .sort((first, second) => second.appointments - first.appointments
@@ -641,54 +690,6 @@ function Dashboard({ theme }) {
   const unmappedSpend = appliedSellerId === 'all' ? currencyRows
     .filter((row) => row.row_type === 'unmatched')
     .reduce((total, row) => total + row.spend, 0) : 0
-
-  const appointmentChartData = {
-    labels: appointmentRanking.map((row) => row.seller_name.split(' ')[0]),
-    datasets: [{
-      label: 'Agendamentos',
-      data: appointmentRanking.map((row) => row.appointments),
-      backgroundColor: appointmentRanking.map((_, index) =>
-        index === 0 ? '#ff7a1a' : `rgba(255, 122, 26, ${Math.max(.3, .76 - index * .08)})`
-      ),
-      borderColor: '#ff7a1a',
-      borderWidth: 1,
-      borderRadius: 9,
-      borderSkipped: false,
-      maxBarThickness: 52,
-    }],
-  }
-  const appointmentChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        callbacks: {
-          label: (context) => ` ${context.raw} ${context.raw === 1 ? 'agendamento' : 'agendamentos'}`,
-          afterLabel: (context) => {
-            const row = appointmentRanking[context.dataIndex]
-            return row.cpa === null ? '' : `CPA: ${money(row.cpa, currency)}`
-          },
-        },
-      },
-    },
-    scales: {
-      x: {
-        grid: { display: false },
-        ticks: { color: theme === 'dark' ? '#fbfaf8' : '#181411', font: { size: 12, weight: 650 } },
-      },
-      y: {
-        beginAtZero: true,
-        grid: { color: theme === 'dark' ? 'rgba(255,255,255,.07)' : 'rgba(24,20,17,.08)' },
-        ticks: {
-          color: theme === 'dark' ? '#aaa19a' : '#746c66',
-          precision: 0,
-          stepSize: 1,
-          font: { size: 11, weight: 600 },
-        },
-      },
-    },
-  }
 
   const comparisonMode = timelineRows[0]?.comparison_mode || comparisonModeFor(appliedFilters)
   const hourlyBucketsWithSales = comparisonMode === 'day_hours'
@@ -840,6 +841,129 @@ function Dashboard({ theme }) {
         ticks: {
           autoSkip: true,
           maxTicksLimit: comparisonMode === 'week_days' ? 7 : comparisonMode === 'day_hours' ? 12 : 16,
+          color: theme === 'dark' ? '#aaa19a' : '#746c66',
+          font: { size: 11, weight: 600 },
+        },
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: theme === 'dark' ? 'rgba(255,255,255,.07)' : 'rgba(24,20,17,.08)' },
+        ticks: {
+          color: theme === 'dark' ? '#aaa19a' : '#746c66',
+          precision: 0,
+          stepSize: 1,
+          font: { size: 11, weight: 600 },
+        },
+      },
+    },
+  }
+
+  const sellerComparisonMode = sellerTimelineRows[0]?.comparison_mode
+    || sellerComparisonModeFor(appliedFilters)
+  const allSellerBucketKeys = [...new Set(sellerTimelineRows.map((row) => row.bucket_start))]
+    .sort((first, second) => new Date(first) - new Date(second))
+  const sellerBucketsWithSales = new Set(
+    sellerTimelineRows.filter((row) => row.sales > 0).map((row) => row.bucket_start),
+  )
+  const activeSellerBucketIndexes = allSellerBucketKeys
+    .map((bucket, index) => (sellerBucketsWithSales.has(bucket) ? index : -1))
+    .filter((index) => index >= 0)
+  const sellerBucketKeys = sellerComparisonMode === 'seller_hours'
+    && activeSellerBucketIndexes.length > 0
+    ? allSellerBucketKeys.slice(
+      Math.min(...activeSellerBucketIndexes),
+      Math.max(...activeSellerBucketIndexes) + 1,
+    )
+    : allSellerBucketKeys
+  const sellerBucketIndexes = new Map(sellerBucketKeys.map((bucket, index) => [bucket, index]))
+  const sellerSeriesById = new Map()
+  sellerTimelineRows.forEach((row) => {
+    if (!sellerSeriesById.has(row.seller_id)) {
+      sellerSeriesById.set(row.seller_id, {
+        id: row.seller_id,
+        name: row.seller_name,
+        data: Array(sellerBucketKeys.length).fill(0),
+      })
+    }
+    const bucketIndex = sellerBucketIndexes.get(row.bucket_start)
+    if (bucketIndex !== undefined) {
+      sellerSeriesById.get(row.seller_id).data[bucketIndex] = row.sales
+    }
+  })
+  const sellerComparisonSeries = [...sellerSeriesById.values()]
+    .map((series) => ({
+      ...series,
+      total: series.data.reduce((total, sales) => total + sales, 0),
+    }))
+    .sort((first, second) => second.total - first.total
+      || first.name.localeCompare(second.name, 'pt-BR'))
+  const sellerSalesChartData = {
+    labels: sellerBucketKeys.map((bucket) => (
+      sellerComparisonBucketLabel(sellerComparisonMode, bucket)
+    )),
+    datasets: sellerComparisonSeries.map((series, index) => {
+      const color = comparisonLineColor(index, theme)
+      return {
+        label: series.name,
+        data: series.data,
+        borderColor: color,
+        backgroundColor: color,
+        borderWidth: index === 0 ? 3 : 2.5,
+        pointBackgroundColor: color,
+        pointBorderColor: theme === 'dark' ? '#181411' : '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: sellerBucketKeys.length > 16 ? 2.5 : 4,
+        pointHoverRadius: 6,
+        tension: .3,
+        fill: false,
+      }
+    }),
+  }
+  const sellerSalesChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        display: true,
+        position: 'bottom',
+        labels: {
+          color: theme === 'dark' ? '#fbfaf8' : '#181411',
+          usePointStyle: true,
+          pointStyle: 'rectRounded',
+          pointStyleWidth: 24,
+          padding: 18,
+          font: { size: 11, weight: 650 },
+        },
+        onHover: (event, item, legend) => {
+          if (event.native?.target) event.native.target.style.cursor = 'pointer'
+          highlightComparisonSeries(legend, item.datasetIndex)
+        },
+        onLeave: (event, _item, legend) => {
+          if (event.native?.target) event.native.target.style.cursor = 'default'
+          highlightComparisonSeries(legend, legend.chart.$comparisonPinned ?? null)
+        },
+        onClick: (_event, item, legend) => {
+          const chart = legend.chart
+          const nextPinned = chart.$comparisonPinned === item.datasetIndex
+            ? null
+            : item.datasetIndex
+          chart.$comparisonPinned = nextPinned
+          highlightComparisonSeries(legend, nextPinned)
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: (context) => ` ${context.dataset.label}: ${context.raw} ${context.raw === 1 ? 'venda' : 'vendas'}`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: {
+          autoSkip: true,
+          maxTicksLimit: sellerComparisonMode === 'seller_days' ? 7 : 12,
           color: theme === 'dark' ? '#aaa19a' : '#746c66',
           font: { size: 11, weight: 600 },
         },
@@ -1036,15 +1160,25 @@ function Dashboard({ theme }) {
           </div>
         </article>
 
-        <article className="performance-panel appointment-panel">
+        <article className="performance-panel seller-comparison-panel">
           <div className="ranking-header">
-            <div><span>Volume por vendedor</span><h2>Ranking de agendamentos</h2></div>
-            <span className="currency-reference">Não cancelados</span>
+            <div>
+              <span>Evolução comercial</span>
+              <h2>Vendas por vendedor</h2>
+              <p>Cada linha representa um vendedor ao longo do período.</p>
+            </div>
+            <span className="currency-reference">{sellerComparisonMode === 'seller_hours'
+              ? 'Por hora'
+              : sellerComparisonMode === 'seller_days'
+                ? 'Por dia'
+                : sellerComparisonMode === 'seller_weeks' ? 'Por semana' : 'Por mês'}</span>
           </div>
-          <div className="appointment-chart-area">
+          <div className="seller-sales-chart-area">
             {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando métricas...</div>
-              : appointmentRanking.length > 0 ? <Bar data={appointmentChartData} options={appointmentChartOptions} />
-                : <div className="dashboard-empty"><Users size={28} /><strong>Sem agendamentos no período</strong><span>O gráfico será preenchido quando houver pedidos não cancelados.</span></div>}
+              : sellerTimelineError ? <div className="dashboard-empty"><AlertTriangle size={26} /><strong>Comparativo indisponível</strong><span>{sellerTimelineError}</span></div>
+                : sellerComparisonSeries.length > 0
+                  ? <Line key={`${appliedFilters.start}:${appliedFilters.end}:${appliedSellerId}:sellers`} data={sellerSalesChartData} options={sellerSalesChartOptions} />
+                  : <div className="dashboard-empty"><Users size={28} /><strong>Sem vendas no período</strong><span>O comparativo aparecerá quando houver pedidos não cancelados vinculados a vendedores.</span></div>}
           </div>
         </article>
       </div>

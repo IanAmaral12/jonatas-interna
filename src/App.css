@@ -161,9 +161,9 @@ form { display: grid; gap: 18px; }
 .rank-cpa { display: grid; justify-items: end; gap: 4px; padding-left: 9px; border-left: 1px solid var(--border); }
 .rank-cpa small { color: var(--muted); font-size: 8px; font-weight: 800; letter-spacing: .7px; }
 .rank-cpa strong { color: var(--orange-dark); font: 750 15px/1 'Manrope', sans-serif; white-space: nowrap; }
-.appointment-chart-area { height: 410px; margin-top: 24px; }
+.seller-sales-chart-area { height: 410px; margin-top: 24px; }
 .sales-comparison-panel { min-width: 0; margin-top: 20px; padding: 24px; border: 1px solid var(--border); border-radius: 17px; background: var(--surface); box-shadow: 0 12px 40px rgba(30,20,12,.045); }
-.sales-comparison-panel .ranking-header p { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.sales-comparison-panel .ranking-header p, .seller-comparison-panel .ranking-header p { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .sales-comparison-chart-area { height: 340px; margin-top: 25px; }
 .seller-performance-panel { min-width: 0; margin-top: 20px; padding: 24px; border: 1px solid var(--border); border-radius: 17px; background: var(--surface); box-shadow: 0 12px 40px rgba(30,20,12,.045); }
 .seller-performance-scroll { margin-top: 22px; overflow-x: auto; scrollbar-color: var(--border-strong) transparent; }
@@ -364,7 +364,7 @@ form { display: grid; gap: 18px; }
   .cpa-rank-card { grid-template-columns: 32px minmax(0, 1fr); }
   .rank-position { width: 31px; height: 31px; }
   .rank-cpa { grid-column: 2; justify-items: start; padding: 7px 0 0; border-top: 1px solid var(--border); border-left: 0; }
-  .appointment-chart-area { height: 360px; }
+  .seller-sales-chart-area { height: 360px; }
   .sales-comparison-panel { padding: 20px; }
   .sales-comparison-chart-area { height: 310px; }
   .seller-performance-panel { padding: 20px; }
