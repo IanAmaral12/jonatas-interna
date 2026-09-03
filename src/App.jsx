@@ -65,16 +65,21 @@ const salesMilestonePlugin = {
       const meta = chart.getDatasetMeta(datasetIndex)
       if (meta.hidden || !Array.isArray(dataset.milestones)) return
 
-      dataset.milestones.forEach(({ dataIndex, count, thresholds }) => {
+      dataset.milestones.forEach(({
+        dataIndex,
+        milestoneIndex,
+        milestonesInBucket,
+        threshold,
+        timeLabel,
+      }) => {
         const point = meta.data[dataIndex]
         if (!point || point.skip) return
-        const stars = '★'.repeat(Math.min(count, 5))
-        const suffix = count > 5 ? ` ×${count}` : ''
+        const horizontalOffset = (milestoneIndex - (milestonesInBucket - 1) / 2) * 15
         const x = Math.min(
-          Math.max(point.x, chart.chartArea.left + 18),
-          chart.chartArea.right - 18,
+          Math.max(point.x + horizontalOffset, chart.chartArea.left + 9),
+          chart.chartArea.right - 9,
         )
-        const markerText = `${stars}${suffix}`
+        const markerText = '★'
 
         chart.ctx.save()
         chart.ctx.font = '700 13px Manrope, sans-serif'
@@ -89,7 +94,7 @@ const salesMilestonePlugin = {
         chart.ctx.restore()
 
         chart.$milestoneHitboxes.push({
-          id: `${datasetIndex}:${dataIndex}`,
+          id: `${datasetIndex}:${dataIndex}:${threshold}`,
           datasetIndex,
           x: x - markerWidth / 2,
           y: markerY - 10,
@@ -97,8 +102,8 @@ const salesMilestonePlugin = {
           height: 20,
           centerX: x,
           centerY: markerY,
-          thresholds,
-          seriesLabel: dataset.label,
+          threshold,
+          timeLabel,
         })
       })
     })
@@ -108,10 +113,7 @@ const salesMilestonePlugin = {
     )
     if (!activeMarker) return
 
-    const milestoneText = activeMarker.thresholds.length === 1
-      ? `${activeMarker.thresholds[0]} vendas acumuladas`
-      : `${activeMarker.thresholds.join(', ')} vendas acumuladas`
-    const tooltipText = `${activeMarker.seriesLabel} · ${milestoneText}`
+    const tooltipText = `${activeMarker.timeLabel} - ${activeMarker.threshold} vendas`
     chart.ctx.save()
     chart.ctx.font = '700 11px Manrope, sans-serif'
     const tooltipWidth = chart.ctx.measureText(tooltipText).width + 20
@@ -256,6 +258,12 @@ const weekdayFormatter = new Intl.DateTimeFormat('pt-BR', {
 const monthYearFormatter = new Intl.DateTimeFormat('pt-BR', {
   month: 'long',
   year: 'numeric',
+})
+const milestoneTimeFormatter = new Intl.DateTimeFormat('pt-BR', {
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+  timeZone: 'America/Sao_Paulo',
 })
 
 function periodLabel(filters) {
@@ -650,11 +658,15 @@ function Dashboard({ theme }) {
         key: row.series_start,
         label: comparisonSeriesLabel(comparisonMode, row.series_start),
         data: Array(comparisonAxisLabels.length).fill(null),
+        milestones: Array.from({ length: comparisonAxisLabels.length }, () => []),
       })
     }
     const series = seriesByStart.get(row.series_start)
     if (row.bucket_index >= 0 && row.bucket_index < series.data.length) {
       series.data[row.bucket_index] = row.sales
+      series.milestones[row.bucket_index] = Array.isArray(row.milestones)
+        ? row.milestones
+        : []
     }
   })
   const comparisonSeries = [...seriesByStart.values()]
@@ -663,24 +675,15 @@ function Dashboard({ theme }) {
     labels: comparisonAxisLabels,
     datasets: comparisonSeries.map((series, index) => {
       const color = comparisonLineColor(index, theme)
-      let cumulativeSales = 0
-      const milestones = []
-      series.data.forEach((sales, dataIndex) => {
-        if (sales === null) return
-        const previousMilestones = Math.floor(cumulativeSales / 10)
-        cumulativeSales += sales
-        const reachedMilestones = Math.floor(cumulativeSales / 10) - previousMilestones
-        if (reachedMilestones > 0) {
-          milestones.push({
-            dataIndex,
-            count: reachedMilestones,
-            thresholds: Array.from(
-              { length: reachedMilestones },
-              (_, milestoneIndex) => (previousMilestones + milestoneIndex + 1) * 10,
-            ),
-          })
-        }
-      })
+      const milestones = series.milestones.flatMap((bucketMilestones, dataIndex) => (
+        bucketMilestones.map((milestone, milestoneIndex) => ({
+          dataIndex,
+          milestoneIndex,
+          milestonesInBucket: bucketMilestones.length,
+          threshold: Number(milestone.threshold),
+          timeLabel: milestoneTimeFormatter.format(new Date(milestone.reached_at)),
+        }))
+      ))
       return {
         label: series.label,
         data: series.data,
