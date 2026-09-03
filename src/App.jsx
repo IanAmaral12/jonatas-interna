@@ -150,6 +150,9 @@ const compactDateFormatter = new Intl.DateTimeFormat('pt-BR', {
   day: '2-digit',
   month: '2-digit',
 })
+const weekdayFormatter = new Intl.DateTimeFormat('pt-BR', {
+  weekday: 'short',
+})
 const monthYearFormatter = new Intl.DateTimeFormat('pt-BR', {
   month: 'long',
   year: 'numeric',
@@ -356,17 +359,20 @@ function comparisonModeFor(filters) {
 function comparisonSeriesLabel(mode, startValue) {
   const start = dateFromValue(startValue)
   if (!start) return startValue
-  if (mode === 'day_hours') return compactDateFormatter.format(start)
+  if (mode === 'day_hours') {
+    const weekday = weekdayFormatter.format(start).replace('.', '')
+    return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} · ${compactDateFormatter.format(start)}`
+  }
   if (mode === 'week_days') {
     return `${compactDateFormatter.format(start)} – ${compactDateFormatter.format(moveDate(start, 6))}`
   }
   return monthYearFormatter.format(start)
 }
 
-function comparisonLineColor(index, theme) {
-  if (index === 0) return '#ff7a1a'
+function comparisonLineColor(index, theme, alpha = 1) {
+  if (index === 0) return `rgba(255, 122, 26, ${alpha})`
   const hue = (28 + index * 61) % 360
-  return `hsl(${hue} 72% ${theme === 'dark' ? '62%' : '45%'})`
+  return `hsla(${hue}, 72%, ${theme === 'dark' ? '62%' : '45%'}, ${alpha})`
 }
 
 function Dashboard({ theme }) {
@@ -559,6 +565,21 @@ function Dashboard({ theme }) {
       }
     }),
   }
+  const highlightComparisonSeries = (legend, focusedIndex = null) => {
+    const chart = legend.chart
+    if (chart.$comparisonFocus === focusedIndex) return
+    chart.$comparisonFocus = focusedIndex
+    chart.data.datasets.forEach((dataset, index) => {
+      const isFocused = focusedIndex === null || focusedIndex === index
+      const color = comparisonLineColor(index, theme, isFocused ? 1 : .16)
+      dataset.borderColor = color
+      dataset.backgroundColor = color
+      dataset.pointBackgroundColor = color
+      dataset.borderWidth = focusedIndex === index ? 4 : index === 0 ? 3 : 2.5
+      dataset.order = focusedIndex === index ? -1 : 0
+    })
+    chart.update('none')
+  }
   const salesTimelineChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -570,9 +591,18 @@ function Dashboard({ theme }) {
         labels: {
           color: theme === 'dark' ? '#fbfaf8' : '#181411',
           usePointStyle: true,
-          pointStyle: 'line',
+          pointStyle: 'rectRounded',
+          pointStyleWidth: 24,
           padding: 18,
           font: { size: 11, weight: 650 },
+        },
+        onHover: (event, item, legend) => {
+          if (event.native?.target) event.native.target.style.cursor = 'pointer'
+          highlightComparisonSeries(legend, item.datasetIndex)
+        },
+        onLeave: (event, _item, legend) => {
+          if (event.native?.target) event.native.target.style.cursor = 'default'
+          highlightComparisonSeries(legend)
         },
       },
       tooltip: {
