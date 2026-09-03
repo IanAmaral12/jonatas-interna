@@ -499,15 +499,43 @@ function comparisonLineColor(index, theme, alpha = 1) {
 }
 
 function Dashboard({ theme }) {
+  const sellerFilterRef = useRef(null)
   const today = localDateValue()
   const [filters, setFilters] = useState({ start: today, end: today })
   const [appliedFilters, setAppliedFilters] = useState({ start: today, end: today })
   const [rows, setRows] = useState([])
   const [timelineRows, setTimelineRows] = useState([])
+  const [sellerOptions, setSellerOptions] = useState([])
+  const [appliedSellerId, setAppliedSellerId] = useState('all')
+  const [draftSellerId, setDraftSellerId] = useState('all')
+  const [isSellerFilterOpen, setIsSellerFilterOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [timelineError, setTimelineError] = useState('')
   const currency = 'BRL'
+
+  useEffect(() => {
+    let active = true
+    supabase.rpc('get_dashboard_sellers').then(({ data }) => {
+      if (active) setSellerOptions(data || [])
+    })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    if (!isSellerFilterOpen) return undefined
+    const closeSellerFilter = (event) => {
+      if (event.type === 'keydown' && event.key !== 'Escape') return
+      if (event.type === 'pointerdown' && sellerFilterRef.current?.contains(event.target)) return
+      setIsSellerFilterOpen(false)
+    }
+    document.addEventListener('pointerdown', closeSellerFilter)
+    window.addEventListener('keydown', closeSellerFilter)
+    return () => {
+      document.removeEventListener('pointerdown', closeSellerFilter)
+      window.removeEventListener('keydown', closeSellerFilter)
+    }
+  }, [isSellerFilterOpen])
 
   useEffect(() => {
     let active = true
@@ -522,7 +550,10 @@ function Dashboard({ theme }) {
       }
       const [metricsResult, timelineResult] = await Promise.all([
         supabase.rpc('get_cpa_dashboard', queryParams),
-        supabase.rpc('get_orders_sales_timeline', queryParams),
+        supabase.rpc('get_orders_sales_timeline', {
+          ...queryParams,
+          p_seller_id: appliedSellerId === 'all' ? null : appliedSellerId,
+        }),
       ])
 
       if (!active) return
@@ -561,10 +592,15 @@ function Dashboard({ theme }) {
 
     loadMetrics()
     return () => { active = false }
-  }, [appliedFilters])
+  }, [appliedFilters, appliedSellerId])
 
   const currencyRows = rows.filter((row) => row.currency === currency)
-  const general = rows.find((row) => row.currency === currency && row.row_type === 'general')
+  const scopedCurrencyRows = appliedSellerId === 'all'
+    ? currencyRows
+    : currencyRows.filter((row) => row.seller_id === appliedSellerId)
+  const general = appliedSellerId === 'all'
+    ? rows.find((row) => row.currency === currency && row.row_type === 'general')
+    : scopedCurrencyRows.find((row) => row.seller_id === appliedSellerId)
   const summary = {
     spend: general?.spend || 0,
     leads: general?.leads || 0,
@@ -576,7 +612,7 @@ function Dashboard({ theme }) {
     roas: general?.roas ?? null,
     averageTicket: general?.average_ticket ?? null,
   }
-  const cpaRanking = currencyRows
+  const cpaRanking = scopedCurrencyRows
     .filter((row) => row.seller_id && !row.currency_conflict)
     .sort((first, second) => {
       if (first.cpa === null) return 1
@@ -584,18 +620,27 @@ function Dashboard({ theme }) {
       return first.cpa - second.cpa
     })
     .filter((row) => row.cpa !== null)
-  const appointmentRanking = currencyRows
+  const appointmentRanking = scopedCurrencyRows
     .filter((row) => row.seller_id && row.appointments > 0)
     .sort((first, second) => second.appointments - first.appointments
       || first.seller_name.localeCompare(second.seller_name, 'pt-BR'))
-  const commercialRows = currencyRows
+  const commercialRows = scopedCurrencyRows
     .filter((row) => row.seller_id)
     .sort((first, second) => second.appointments - first.appointments
       || second.revenue - first.revenue
       || first.seller_name.localeCompare(second.seller_name, 'pt-BR'))
-  const unmappedSpend = currencyRows
+  const availableSellerOptions = sellerOptions.length > 0
+    ? sellerOptions
+    : currencyRows
+      .filter((row) => row.seller_id)
+      .map((row) => ({ id: row.seller_id, name: row.seller_name }))
+      .filter((seller, index, sellers) => (
+        sellers.findIndex((candidate) => candidate.id === seller.id) === index
+      ))
+      .sort((first, second) => first.name.localeCompare(second.name, 'pt-BR'))
+  const unmappedSpend = appliedSellerId === 'all' ? currencyRows
     .filter((row) => row.row_type === 'unmatched')
-    .reduce((total, row) => total + row.spend, 0)
+    .reduce((total, row) => total + row.spend, 0) : 0
 
   const appointmentChartData = {
     labels: appointmentRanking.map((row) => row.seller_name.split(' ')[0]),
@@ -816,6 +861,22 @@ function Dashboard({ theme }) {
     if (filters.start <= filters.end) setAppliedFilters({ ...filters })
   }
 
+  const toggleSellerFilter = () => {
+    setDraftSellerId(appliedSellerId)
+    setIsSellerFilterOpen((current) => !current)
+  }
+
+  const applySellerFilter = () => {
+    setAppliedSellerId(draftSellerId)
+    setIsSellerFilterOpen(false)
+  }
+
+  const clearSellerFilter = () => {
+    setDraftSellerId('all')
+    setAppliedSellerId('all')
+    setIsSellerFilterOpen(false)
+  }
+
   return (
     <section id="dashboard" className="dashboard-content" aria-label="Dashboard de performance">
       <header className="dashboard-header">
@@ -824,13 +885,52 @@ function Dashboard({ theme }) {
           <h1>Dashboard de performance</h1>
           <p>Mídia e agendamentos da operação em uma única visão.</p>
         </div>
-        <DateRangeFilter
-          filters={filters}
-          appliedFilters={appliedFilters}
-          setFilters={setFilters}
-          onApply={applyFilters}
-          loading={loading}
-        />
+        <div className="dashboard-filter-actions">
+          <DateRangeFilter
+            filters={filters}
+            appliedFilters={appliedFilters}
+            setFilters={setFilters}
+            onApply={applyFilters}
+            loading={loading}
+          />
+
+          <div className="dashboard-seller-filter cash-filter-menu-wrapper" ref={sellerFilterRef}>
+            <button
+              className={`cash-filter-trigger${appliedSellerId !== 'all' ? ' active' : ''}`}
+              type="button"
+              aria-expanded={isSellerFilterOpen}
+              aria-controls="dashboard-seller-filter-menu"
+              onClick={toggleSellerFilter}
+            >
+              <Filter size={17} /> Filtrar
+              {appliedSellerId !== 'all' && <span>1</span>}
+            </button>
+
+            {isSellerFilterOpen && (
+              <div className="cash-filter-popover" id="dashboard-seller-filter-menu">
+                <div className="cash-filter-popover-header">
+                  <div><small>Escopo da dashboard</small><strong>Filtrar por vendedor</strong></div>
+                  <button type="button" aria-label="Fechar filtro" onClick={() => setIsSellerFilterOpen(false)}><X size={16} /></button>
+                </div>
+                <div className="cash-filter-popover-body">
+                  <div className="cash-filter-field">
+                    <label htmlFor="dashboard-seller-select">Vendedor</label>
+                    <select id="dashboard-seller-select" value={draftSellerId} onChange={(event) => setDraftSellerId(event.target.value)}>
+                      <option value="all">Todos os vendedores</option>
+                      {availableSellerOptions.map((seller) => (
+                        <option value={seller.id} key={seller.id}>{seller.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="cash-filter-popover-actions">
+                  <button className="cash-clear-filters" type="button" disabled={appliedSellerId === 'all' && draftSellerId === 'all'} onClick={clearSellerFilter}>Limpar</button>
+                  <button className="cash-apply-filters" type="button" disabled={loading} onClick={applySellerFilter}>Aplicar filtro</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </header>
 
       {error && <div className="dashboard-alert error"><AlertTriangle size={18} />{error}</div>}
@@ -838,7 +938,7 @@ function Dashboard({ theme }) {
       <div className="metric-grid">
         <article className="metric-card">
           <div className="metric-icon"><TrendingDown size={20} /></div>
-          <div className="metric-label"><span>CPA geral</span><b>BRL</b></div>
+          <div className="metric-label"><span>{appliedSellerId === 'all' ? 'CPA geral' : 'CPA do vendedor'}</span><b>BRL</b></div>
           <strong>{summary.cpa === null ? '—' : money(summary.cpa, currency)}</strong>
           <small>{summary.appointments} agendamentos</small>
         </article>
@@ -850,7 +950,7 @@ function Dashboard({ theme }) {
         </article>
         <article className="metric-card">
           <div className="metric-icon"><Target size={20} /></div>
-          <div className="metric-label"><span>CPL geral</span><b>BRL</b></div>
+          <div className="metric-label"><span>{appliedSellerId === 'all' ? 'CPL geral' : 'CPL do vendedor'}</span><b>BRL</b></div>
           <strong>{summary.cpl === null ? '—' : money(summary.cpl, currency)}</strong>
           <small>{summary.leads} conversas iniciadas</small>
         </article>
@@ -910,7 +1010,7 @@ function Dashboard({ theme }) {
         <div className="sales-comparison-chart-area">
           {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando comparativo...</div>
             : timelineError ? <div className="dashboard-empty"><AlertTriangle size={26} /><strong>Comparativo indisponível</strong><span>{timelineError}</span></div>
-              : hasTimelineSales ? <Line key={`${appliedFilters.start}:${appliedFilters.end}`} data={salesTimelineChartData} options={salesTimelineChartOptions} plugins={[salesMilestonePlugin]} />
+              : hasTimelineSales ? <Line key={`${appliedFilters.start}:${appliedFilters.end}:${appliedSellerId}`} data={salesTimelineChartData} options={salesTimelineChartOptions} plugins={[salesMilestonePlugin]} />
                 : <div className="dashboard-empty"><ChartNoAxesCombined size={28} /><strong>Sem vendas no período</strong><span>O gráfico será preenchido quando houver pedidos não cancelados.</span></div>}
         </div>
       </article>

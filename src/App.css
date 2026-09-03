@@ -83,6 +83,9 @@ form { display: grid; gap: 18px; }
 .dashboard-eyebrow { color: var(--orange-dark); font-size: 11px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; }
 .dashboard-header h1 { margin: 7px 0 7px; color: var(--ink); font: 750 clamp(29px, 3vw, 40px)/1.1 'Manrope', sans-serif; letter-spacing: -1.7px; }
 .dashboard-header p { margin: 0; color: var(--muted); font-size: 14px; }
+.dashboard-filter-actions { display: flex; flex: 0 0 auto; align-items: flex-end; gap: 10px; }
+.dashboard-seller-filter { z-index: 21; }
+.dashboard-seller-filter .cash-filter-trigger { min-height: 62px; padding: 0 17px; border-radius: 14px; background: var(--surface); box-shadow: 0 9px 30px rgba(27,18,12,.04); }
 .date-filter { position: relative; z-index: 20; flex: 0 0 auto; }
 .period-trigger { min-width: 304px; min-height: 62px; display: flex; align-items: center; gap: 12px; padding: 8px 13px 8px 9px; color: var(--ink); border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 9px 30px rgba(27, 18, 12, .04); text-align: left; transition: border-color .2s, box-shadow .2s, transform .2s; }
 .period-trigger:hover, .period-trigger.open { border-color: rgba(255,122,26,.6); box-shadow: 0 12px 34px rgba(27,18,12,.08), 0 0 0 3px var(--orange-soft); }
@@ -307,6 +310,7 @@ form { display: grid; gap: 18px; }
   .visual-card { opacity: .65; }
   .form-panel { padding-inline: 55px; }
   .dashboard-header { align-items: flex-start; flex-direction: column; }
+  .dashboard-filter-actions { align-items: stretch; }
   .date-popover { right: auto; left: 0; max-width: calc(100vw - 305px); }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -336,8 +340,11 @@ form { display: grid; gap: 18px; }
   .sidebar-controls { gap: 8px; }
   .sidebar-control { min-height: 51px; flex-direction: column; justify-content: center; gap: 4px; padding: 5px 2px; font-size: 9px; text-align: center; }
   .dashboard-content { padding: 27px 18px 42px; }
+  .dashboard-filter-actions { width: 100%; flex-direction: column; }
   .date-filter, .period-trigger { width: 100%; }
   .period-trigger { min-width: 0; }
+  .dashboard-seller-filter, .dashboard-seller-filter .cash-filter-trigger { width: 100%; }
+  .dashboard-seller-filter .cash-filter-popover { right: 0; left: auto; width: min(310px, calc(100vw - 126px)); }
   .date-popover { width: min(430px, calc(100vw - 126px)); max-width: none; }
   .date-popover-body { grid-template-columns: 1fr; }
   .date-presets { flex-flow: row wrap; padding: 12px; border-right: 0; border-bottom: 1px solid var(--border); }
