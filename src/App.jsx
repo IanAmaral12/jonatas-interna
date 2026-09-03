@@ -52,18 +52,20 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointEleme
 
 const salesMilestonePlugin = {
   id: 'salesMilestones',
-  afterDatasetsDraw(chart, _args, options) {
-    if (!options?.enabled) return
+  afterDraw(chart, _args, options) {
+    chart.$milestoneHitboxes = []
+    if (!options?.enabled || !chart.legend || !chart.scales.x) return
     const focusedIndex = chart.$comparisonFocus
     const hasMultipleSeries = chart.data.datasets.length > 1
     if (hasMultipleSeries && !Number.isInteger(focusedIndex)) return
+    const markerY = chart.legend.top + 12
 
     chart.data.datasets.forEach((dataset, datasetIndex) => {
       if (hasMultipleSeries && datasetIndex !== focusedIndex) return
       const meta = chart.getDatasetMeta(datasetIndex)
       if (meta.hidden || !Array.isArray(dataset.milestones)) return
 
-      dataset.milestones.forEach(({ dataIndex, count }) => {
+      dataset.milestones.forEach(({ dataIndex, count, thresholds }) => {
         const point = meta.data[dataIndex]
         if (!point || point.skip) return
         const stars = '★'.repeat(Math.min(count, 5))
@@ -72,7 +74,7 @@ const salesMilestonePlugin = {
           Math.max(point.x, chart.chartArea.left + 18),
           chart.chartArea.right - 18,
         )
-        const y = Math.max(point.y - 16, chart.chartArea.top + 9)
+        const markerText = `${stars}${suffix}`
 
         chart.ctx.save()
         chart.ctx.font = '700 13px Manrope, sans-serif'
@@ -81,11 +83,70 @@ const salesMilestonePlugin = {
         chart.ctx.lineWidth = 3
         chart.ctx.strokeStyle = options.outlineColor || '#ffffff'
         chart.ctx.fillStyle = dataset.milestoneColor || '#ffb347'
-        chart.ctx.strokeText(`${stars}${suffix}`, x, y)
-        chart.ctx.fillText(`${stars}${suffix}`, x, y)
+        chart.ctx.strokeText(markerText, x, markerY)
+        chart.ctx.fillText(markerText, x, markerY)
+        const markerWidth = chart.ctx.measureText(markerText).width + 10
         chart.ctx.restore()
+
+        chart.$milestoneHitboxes.push({
+          id: `${datasetIndex}:${dataIndex}`,
+          datasetIndex,
+          x: x - markerWidth / 2,
+          y: markerY - 10,
+          width: markerWidth,
+          height: 20,
+          centerX: x,
+          centerY: markerY,
+          thresholds,
+          seriesLabel: dataset.label,
+        })
       })
     })
+
+    const activeMarker = chart.$milestoneHitboxes.find(
+      (marker) => marker.id === chart.$activeMilestone,
+    )
+    if (!activeMarker) return
+
+    const milestoneText = activeMarker.thresholds.length === 1
+      ? `${activeMarker.thresholds[0]} vendas acumuladas`
+      : `${activeMarker.thresholds.join(', ')} vendas acumuladas`
+    const tooltipText = `${activeMarker.seriesLabel} · ${milestoneText}`
+    chart.ctx.save()
+    chart.ctx.font = '700 11px Manrope, sans-serif'
+    const tooltipWidth = chart.ctx.measureText(tooltipText).width + 20
+    const tooltipHeight = 30
+    const tooltipX = Math.min(
+      Math.max(activeMarker.centerX - tooltipWidth / 2, chart.chartArea.left),
+      chart.chartArea.right - tooltipWidth,
+    )
+    const tooltipY = activeMarker.centerY - tooltipHeight - 11
+    chart.ctx.beginPath()
+    chart.ctx.roundRect(tooltipX, tooltipY, tooltipWidth, tooltipHeight, 8)
+    chart.ctx.fillStyle = options.tooltipBackground || '#181411'
+    chart.ctx.fill()
+    chart.ctx.fillStyle = options.tooltipText || '#ffffff'
+    chart.ctx.textAlign = 'center'
+    chart.ctx.textBaseline = 'middle'
+    chart.ctx.fillText(tooltipText, tooltipX + tooltipWidth / 2, tooltipY + tooltipHeight / 2)
+    chart.ctx.restore()
+  },
+  afterEvent(chart, args, options) {
+    if (!options?.enabled) return
+    const event = args.event
+    const activeMarker = event.type === 'mouseout'
+      ? null
+      : chart.$milestoneHitboxes?.find((marker) => (
+        event.x >= marker.x
+        && event.x <= marker.x + marker.width
+        && event.y >= marker.y
+        && event.y <= marker.y + marker.height
+      ))
+    const nextActive = activeMarker?.id ?? null
+    if (chart.$activeMilestone !== nextActive) {
+      chart.$activeMilestone = nextActive
+      args.changed = true
+    }
   },
 }
 
@@ -609,7 +670,16 @@ function Dashboard({ theme }) {
         const previousMilestones = Math.floor(cumulativeSales / 10)
         cumulativeSales += sales
         const reachedMilestones = Math.floor(cumulativeSales / 10) - previousMilestones
-        if (reachedMilestones > 0) milestones.push({ dataIndex, count: reachedMilestones })
+        if (reachedMilestones > 0) {
+          milestones.push({
+            dataIndex,
+            count: reachedMilestones,
+            thresholds: Array.from(
+              { length: reachedMilestones },
+              (_, milestoneIndex) => (previousMilestones + milestoneIndex + 1) * 10,
+            ),
+          })
+        }
       })
       return {
         label: series.label,
@@ -652,10 +722,18 @@ function Dashboard({ theme }) {
       salesMilestones: {
         enabled: comparisonMode === 'day_hours',
         outlineColor: theme === 'dark' ? '#181411' : '#ffffff',
+        tooltipBackground: theme === 'dark' ? '#fbfaf8' : '#181411',
+        tooltipText: theme === 'dark' ? '#181411' : '#ffffff',
       },
       legend: {
         display: true,
         position: 'bottom',
+        title: {
+          display: comparisonMode === 'day_hours',
+          text: ' ',
+          padding: 12,
+          font: { size: 13 },
+        },
         labels: {
           color: theme === 'dark' ? '#fbfaf8' : '#181411',
           usePointStyle: true,
