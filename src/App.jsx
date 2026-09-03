@@ -576,7 +576,6 @@ function Dashboard({ theme }) {
       dataset.backgroundColor = color
       dataset.pointBackgroundColor = color
       dataset.borderWidth = focusedIndex === index ? 4 : index === 0 ? 3 : 2.5
-      dataset.order = focusedIndex === index ? -1 : 0
     })
     chart.update('none')
   }
