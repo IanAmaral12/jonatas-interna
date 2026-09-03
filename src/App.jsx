@@ -646,8 +646,25 @@ function Dashboard({ theme }) {
   }
 
   const comparisonMode = timelineRows[0]?.comparison_mode || comparisonModeFor(appliedFilters)
+  const hourlyBucketsWithSales = comparisonMode === 'day_hours'
+    ? timelineRows.filter((row) => row.sales > 0).map((row) => row.bucket_index)
+    : []
+  const firstHourlyBucket = hourlyBucketsWithSales.length > 0
+    ? Math.min(...hourlyBucketsWithSales)
+    : 0
+  const lastHourlyBucket = hourlyBucketsWithSales.length > 0
+    ? Math.max(...hourlyBucketsWithSales)
+    : 23
+  const comparisonAxisIndexes = comparisonMode === 'day_hours'
+    ? Array.from(
+      { length: lastHourlyBucket - firstHourlyBucket + 1 },
+      (_, index) => firstHourlyBucket + index,
+    )
+    : comparisonMode === 'week_days'
+      ? Array.from({ length: 7 }, (_, index) => index)
+      : Array.from({ length: 31 }, (_, index) => index)
   const comparisonAxisLabels = comparisonMode === 'day_hours'
-    ? Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, '0')}:00`)
+    ? comparisonAxisIndexes.map((hour) => `${String(hour).padStart(2, '0')}:00`)
     : comparisonMode === 'week_days'
       ? ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
       : Array.from({ length: 31 }, (_, day) => String(day + 1).padStart(2, '0'))
@@ -662,15 +679,19 @@ function Dashboard({ theme }) {
       })
     }
     const series = seriesByStart.get(row.series_start)
-    if (row.bucket_index >= 0 && row.bucket_index < series.data.length) {
-      series.data[row.bucket_index] = row.sales
-      series.milestones[row.bucket_index] = Array.isArray(row.milestones)
+    const axisIndex = comparisonMode === 'day_hours'
+      ? row.bucket_index - firstHourlyBucket
+      : row.bucket_index
+    if (axisIndex >= 0 && axisIndex < series.data.length) {
+      series.data[axisIndex] = row.sales
+      series.milestones[axisIndex] = Array.isArray(row.milestones)
         ? row.milestones
         : []
     }
   })
   const comparisonSeries = [...seriesByStart.values()]
     .sort((first, second) => first.key.localeCompare(second.key))
+  const hasTimelineSales = timelineRows.some((row) => row.sales > 0)
   const salesTimelineChartData = {
     labels: comparisonAxisLabels,
     datasets: comparisonSeries.map((series, index) => {
@@ -889,7 +910,7 @@ function Dashboard({ theme }) {
         <div className="sales-comparison-chart-area">
           {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando comparativo...</div>
             : timelineError ? <div className="dashboard-empty"><AlertTriangle size={26} /><strong>Comparativo indisponível</strong><span>{timelineError}</span></div>
-              : timelineRows.length > 0 ? <Line key={`${appliedFilters.start}:${appliedFilters.end}`} data={salesTimelineChartData} options={salesTimelineChartOptions} plugins={[salesMilestonePlugin]} />
+              : hasTimelineSales ? <Line key={`${appliedFilters.start}:${appliedFilters.end}`} data={salesTimelineChartData} options={salesTimelineChartOptions} plugins={[salesMilestonePlugin]} />
                 : <div className="dashboard-empty"><ChartNoAxesCombined size={28} /><strong>Sem vendas no período</strong><span>O gráfico será preenchido quando houver pedidos não cancelados.</span></div>}
         </div>
       </article>
