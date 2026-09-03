@@ -50,6 +50,45 @@ import './App.css'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend)
 
+const salesMilestonePlugin = {
+  id: 'salesMilestones',
+  afterDatasetsDraw(chart, _args, options) {
+    if (!options?.enabled) return
+    const focusedIndex = chart.$comparisonFocus
+    const hasMultipleSeries = chart.data.datasets.length > 1
+    if (hasMultipleSeries && !Number.isInteger(focusedIndex)) return
+
+    chart.data.datasets.forEach((dataset, datasetIndex) => {
+      if (hasMultipleSeries && datasetIndex !== focusedIndex) return
+      const meta = chart.getDatasetMeta(datasetIndex)
+      if (meta.hidden || !Array.isArray(dataset.milestones)) return
+
+      dataset.milestones.forEach(({ dataIndex, count }) => {
+        const point = meta.data[dataIndex]
+        if (!point || point.skip) return
+        const stars = '★'.repeat(Math.min(count, 5))
+        const suffix = count > 5 ? ` ×${count}` : ''
+        const x = Math.min(
+          Math.max(point.x, chart.chartArea.left + 18),
+          chart.chartArea.right - 18,
+        )
+        const y = Math.max(point.y - 16, chart.chartArea.top + 9)
+
+        chart.ctx.save()
+        chart.ctx.font = '700 13px Manrope, sans-serif'
+        chart.ctx.textAlign = 'center'
+        chart.ctx.textBaseline = 'middle'
+        chart.ctx.lineWidth = 3
+        chart.ctx.strokeStyle = options.outlineColor || '#ffffff'
+        chart.ctx.fillStyle = dataset.milestoneColor || '#ffb347'
+        chart.ctx.strokeText(`${stars}${suffix}`, x, y)
+        chart.ctx.fillText(`${stars}${suffix}`, x, y)
+        chart.ctx.restore()
+      })
+    })
+  },
+}
+
 const initialForm = { email: '', password: '', confirmPassword: '' }
 
 const errorMessages = {
@@ -563,6 +602,15 @@ function Dashboard({ theme }) {
     labels: comparisonAxisLabels,
     datasets: comparisonSeries.map((series, index) => {
       const color = comparisonLineColor(index, theme)
+      let cumulativeSales = 0
+      const milestones = []
+      series.data.forEach((sales, dataIndex) => {
+        if (sales === null) return
+        const previousMilestones = Math.floor(cumulativeSales / 10)
+        cumulativeSales += sales
+        const reachedMilestones = Math.floor(cumulativeSales / 10) - previousMilestones
+        if (reachedMilestones > 0) milestones.push({ dataIndex, count: reachedMilestones })
+      })
       return {
         label: series.label,
         data: series.data,
@@ -577,6 +625,8 @@ function Dashboard({ theme }) {
         tension: .3,
         spanGaps: false,
         fill: false,
+        milestones,
+        milestoneColor: color,
       }
     }),
   }
@@ -599,6 +649,10 @@ function Dashboard({ theme }) {
     maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
     plugins: {
+      salesMilestones: {
+        enabled: comparisonMode === 'day_hours',
+        outlineColor: theme === 'dark' ? '#181411' : '#ffffff',
+      },
       legend: {
         display: true,
         position: 'bottom',
@@ -742,7 +796,7 @@ function Dashboard({ theme }) {
             <span>Evolução no período</span>
             <h2>Comparativo de vendas</h2>
             <p>{comparisonMode === 'day_hours'
-              ? 'Cada linha representa um dia, comparado hora a hora.'
+              ? 'Cada linha representa um dia, comparado hora a hora. Cada ★ marca 10 vendas acumuladas.'
               : comparisonMode === 'week_days'
                 ? 'Cada linha representa uma semana, comparada dia a dia.'
                 : 'Cada linha representa um mês, comparado pelos dias do mês.'}</p>
@@ -754,7 +808,7 @@ function Dashboard({ theme }) {
         <div className="sales-comparison-chart-area">
           {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando comparativo...</div>
             : timelineError ? <div className="dashboard-empty"><AlertTriangle size={26} /><strong>Comparativo indisponível</strong><span>{timelineError}</span></div>
-              : timelineRows.length > 0 ? <Line key={`${appliedFilters.start}:${appliedFilters.end}`} data={salesTimelineChartData} options={salesTimelineChartOptions} />
+              : timelineRows.length > 0 ? <Line key={`${appliedFilters.start}:${appliedFilters.end}`} data={salesTimelineChartData} options={salesTimelineChartOptions} plugins={[salesMilestonePlugin]} />
                 : <div className="dashboard-empty"><ChartNoAxesCombined size={28} /><strong>Sem vendas no período</strong><span>O gráfico será preenchido quando houver pedidos não cancelados.</span></div>}
         </div>
       </article>
