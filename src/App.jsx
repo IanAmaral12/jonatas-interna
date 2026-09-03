@@ -146,6 +146,14 @@ const shortDateFormatter = new Intl.DateTimeFormat('pt-BR', {
   month: 'short',
   year: 'numeric',
 })
+const compactDateFormatter = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: '2-digit',
+})
+const monthYearFormatter = new Intl.DateTimeFormat('pt-BR', {
+  month: 'long',
+  year: 'numeric',
+})
 
 function periodLabel(filters) {
   const start = dateFromValue(filters.start)
@@ -338,6 +346,29 @@ function rate(value, suffix = '%') {
   return value === null || value === undefined ? '—' : `${decimal(value)}${suffix}`
 }
 
+function comparisonModeFor(filters) {
+  const days = selectedDays(filters)
+  if (days <= 7) return 'day_hours'
+  if (days <= 29) return 'week_days'
+  return 'month_days'
+}
+
+function comparisonSeriesLabel(mode, startValue) {
+  const start = dateFromValue(startValue)
+  if (!start) return startValue
+  if (mode === 'day_hours') return compactDateFormatter.format(start)
+  if (mode === 'week_days') {
+    return `${compactDateFormatter.format(start)} – ${compactDateFormatter.format(moveDate(start, 6))}`
+  }
+  return monthYearFormatter.format(start)
+}
+
+function comparisonLineColor(index, theme) {
+  if (index === 0) return '#ff7a1a'
+  const hue = (28 + index * 61) % 360
+  return `hsl(${hue} 72% ${theme === 'dark' ? '62%' : '45%'})`
+}
+
 function Dashboard({ theme }) {
   const today = localDateValue()
   const [filters, setFilters] = useState({ start: today, end: today })
@@ -393,6 +424,7 @@ function Dashboard({ theme }) {
         setTimelineRows((timelineResult.data || []).map((row) => ({
           ...row,
           sales: Number(row.sales || 0),
+          bucket_index: Number(row.bucket_index),
         })))
       }
       setLoading(false)
@@ -484,44 +516,68 @@ function Dashboard({ theme }) {
     },
   }
 
-  const timelineGranularity = timelineRows[0]?.granularity
-    || (selectedDays(appliedFilters) <= 2 ? 'hour' : 'day')
-  const timelineSpansMultipleDays = timelineGranularity === 'hour'
-    && appliedFilters.start !== appliedFilters.end
-  const timelineLabelFormatter = new Intl.DateTimeFormat('pt-BR', timelineGranularity === 'hour'
-    ? {
-      ...(timelineSpansMultipleDays ? { day: '2-digit', month: '2-digit' } : {}),
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'America/Sao_Paulo',
+  const comparisonMode = timelineRows[0]?.comparison_mode || comparisonModeFor(appliedFilters)
+  const comparisonAxisLabels = comparisonMode === 'day_hours'
+    ? Array.from({ length: 24 }, (_, hour) => `${String(hour).padStart(2, '0')}:00`)
+    : comparisonMode === 'week_days'
+      ? ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+      : Array.from({ length: 31 }, (_, day) => String(day + 1).padStart(2, '0'))
+  const seriesByStart = new Map()
+  timelineRows.forEach((row) => {
+    if (!seriesByStart.has(row.series_start)) {
+      seriesByStart.set(row.series_start, {
+        key: row.series_start,
+        label: comparisonSeriesLabel(comparisonMode, row.series_start),
+        data: Array(comparisonAxisLabels.length).fill(null),
+      })
     }
-    : { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
+    const series = seriesByStart.get(row.series_start)
+    if (row.bucket_index >= 0 && row.bucket_index < series.data.length) {
+      series.data[row.bucket_index] = row.sales
+    }
+  })
+  const comparisonSeries = [...seriesByStart.values()]
+    .sort((first, second) => first.key.localeCompare(second.key))
   const salesTimelineChartData = {
-    labels: timelineRows.map((row) => timelineLabelFormatter.format(new Date(row.bucket_start))),
-    datasets: [{
-      label: 'Vendas',
-      data: timelineRows.map((row) => row.sales),
-      borderColor: '#ff7a1a',
-      backgroundColor: 'rgba(255, 122, 26, .16)',
-      borderWidth: 3,
-      pointBackgroundColor: '#ff7a1a',
-      pointBorderColor: theme === 'dark' ? '#181411' : '#ffffff',
-      pointBorderWidth: 2,
-      pointRadius: timelineRows.length > 31 ? 2 : 4,
-      pointHoverRadius: 6,
-      tension: .32,
-      fill: false,
-    }],
+    labels: comparisonAxisLabels,
+    datasets: comparisonSeries.map((series, index) => {
+      const color = comparisonLineColor(index, theme)
+      return {
+        label: series.label,
+        data: series.data,
+        borderColor: color,
+        backgroundColor: color,
+        borderWidth: index === 0 ? 3 : 2.5,
+        pointBackgroundColor: color,
+        pointBorderColor: theme === 'dark' ? '#181411' : '#ffffff',
+        pointBorderWidth: 2,
+        pointRadius: comparisonMode === 'week_days' ? 4 : 3,
+        pointHoverRadius: 6,
+        tension: .3,
+        spanGaps: false,
+        fill: false,
+      }
+    }),
   }
   const salesTimelineChartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
     plugins: {
-      legend: { display: false },
+      legend: {
+        display: true,
+        position: 'bottom',
+        labels: {
+          color: theme === 'dark' ? '#fbfaf8' : '#181411',
+          usePointStyle: true,
+          pointStyle: 'line',
+          padding: 18,
+          font: { size: 11, weight: 650 },
+        },
+      },
       tooltip: {
         callbacks: {
-          label: (context) => ` ${context.raw} ${context.raw === 1 ? 'venda' : 'vendas'}`,
+          label: (context) => ` ${context.dataset.label}: ${context.raw} ${context.raw === 1 ? 'venda' : 'vendas'}`,
         },
       },
     },
@@ -530,7 +586,7 @@ function Dashboard({ theme }) {
         grid: { display: false },
         ticks: {
           autoSkip: true,
-          maxTicksLimit: timelineGranularity === 'hour' ? 12 : 16,
+          maxTicksLimit: comparisonMode === 'week_days' ? 7 : comparisonMode === 'day_hours' ? 12 : 16,
           color: theme === 'dark' ? '#aaa19a' : '#746c66',
           font: { size: 11, weight: 600 },
         },
@@ -633,9 +689,15 @@ function Dashboard({ theme }) {
           <div>
             <span>Evolução no período</span>
             <h2>Comparativo de vendas</h2>
-            <p>Pedidos não cancelados distribuídos {timelineGranularity === 'hour' ? 'por hora do dia' : 'por dia'}.</p>
+            <p>{comparisonMode === 'day_hours'
+              ? 'Cada linha representa um dia, comparado hora a hora.'
+              : comparisonMode === 'week_days'
+                ? 'Cada linha representa uma semana, comparada dia a dia.'
+                : 'Cada linha representa um mês, comparado pelos dias do mês.'}</p>
           </div>
-          <span className="currency-reference">{timelineGranularity === 'hour' ? 'Por hora' : 'Por dia'}</span>
+          <span className="currency-reference">{comparisonMode === 'day_hours'
+            ? 'Dias por hora'
+            : comparisonMode === 'week_days' ? 'Semanas por dia' : 'Meses por dia'}</span>
         </div>
         <div className="sales-comparison-chart-area">
           {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando comparativo...</div>
