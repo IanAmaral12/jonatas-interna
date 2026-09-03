@@ -39,14 +39,16 @@ import {
   CategoryScale,
   Chart as ChartJS,
   Legend,
+  LineElement,
   LinearScale,
+  PointElement,
   Tooltip,
 } from 'chart.js'
-import { Bar } from 'react-chartjs-2'
+import { Bar, Line } from 'react-chartjs-2'
 import { supabase, supabaseConfigError } from './lib/supabase'
 import './App.css'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend)
 
 const initialForm = { email: '', password: '', confirmPassword: '' }
 
@@ -341,8 +343,10 @@ function Dashboard({ theme }) {
   const [filters, setFilters] = useState({ start: today, end: today })
   const [appliedFilters, setAppliedFilters] = useState({ start: today, end: today })
   const [rows, setRows] = useState([])
+  const [timelineRows, setTimelineRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [timelineError, setTimelineError] = useState('')
   const currency = 'BRL'
 
   useEffect(() => {
@@ -351,17 +355,22 @@ function Dashboard({ theme }) {
     const loadMetrics = async () => {
       setLoading(true)
       setError('')
-      const { data, error: queryError } = await supabase.rpc('get_cpa_dashboard', {
+      setTimelineError('')
+      const queryParams = {
         p_start_date: appliedFilters.start,
         p_end_date: appliedFilters.end,
-      })
+      }
+      const [metricsResult, timelineResult] = await Promise.all([
+        supabase.rpc('get_cpa_dashboard', queryParams),
+        supabase.rpc('get_orders_sales_timeline', queryParams),
+      ])
 
       if (!active) return
-      if (queryError) {
+      if (metricsResult.error) {
         setError('Não foi possível carregar os dados do dashboard.')
         setRows([])
       } else {
-        setRows((data || []).map((row) => ({
+        setRows((metricsResult.data || []).map((row) => ({
           ...row,
           spend: Number(row.spend || 0),
           leads: Number(row.leads || 0),
@@ -375,6 +384,15 @@ function Dashboard({ theme }) {
           lead_to_appointment_ratio: row.lead_to_appointment_ratio === null ? null : Number(row.lead_to_appointment_ratio),
           roas: row.roas === null ? null : Number(row.roas),
           average_ticket: row.average_ticket === null ? null : Number(row.average_ticket),
+        })))
+      }
+      if (timelineResult.error) {
+        setTimelineError('Não foi possível carregar o comparativo de vendas.')
+        setTimelineRows([])
+      } else {
+        setTimelineRows((timelineResult.data || []).map((row) => ({
+          ...row,
+          sales: Number(row.sales || 0),
         })))
       }
       setLoading(false)
@@ -452,6 +470,63 @@ function Dashboard({ theme }) {
       x: {
         grid: { display: false },
         ticks: { color: theme === 'dark' ? '#fbfaf8' : '#181411', font: { size: 12, weight: 650 } },
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: theme === 'dark' ? 'rgba(255,255,255,.07)' : 'rgba(24,20,17,.08)' },
+        ticks: {
+          color: theme === 'dark' ? '#aaa19a' : '#746c66',
+          precision: 0,
+          stepSize: 1,
+          font: { size: 11, weight: 600 },
+        },
+      },
+    },
+  }
+
+  const timelineGranularity = timelineRows[0]?.granularity
+    || (appliedFilters.start === appliedFilters.end ? 'hour' : 'day')
+  const timelineLabelFormatter = new Intl.DateTimeFormat('pt-BR', timelineGranularity === 'hour'
+    ? { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }
+    : { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
+  const salesTimelineChartData = {
+    labels: timelineRows.map((row) => timelineLabelFormatter.format(new Date(row.bucket_start))),
+    datasets: [{
+      label: 'Vendas',
+      data: timelineRows.map((row) => row.sales),
+      borderColor: '#ff7a1a',
+      backgroundColor: 'rgba(255, 122, 26, .16)',
+      borderWidth: 3,
+      pointBackgroundColor: '#ff7a1a',
+      pointBorderColor: theme === 'dark' ? '#181411' : '#ffffff',
+      pointBorderWidth: 2,
+      pointRadius: timelineRows.length > 31 ? 2 : 4,
+      pointHoverRadius: 6,
+      tension: .32,
+      fill: false,
+    }],
+  }
+  const salesTimelineChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: (context) => ` ${context.raw} ${context.raw === 1 ? 'venda' : 'vendas'}`,
+        },
+      },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: {
+          autoSkip: true,
+          maxTicksLimit: timelineGranularity === 'hour' ? 12 : 16,
+          color: theme === 'dark' ? '#aaa19a' : '#746c66',
+          font: { size: 11, weight: 600 },
+        },
       },
       y: {
         beginAtZero: true,
@@ -545,6 +620,23 @@ function Dashboard({ theme }) {
           {money(unmappedSpend, currency)} ainda sem vendedor.
         </div>
       )}
+
+      <article className="sales-comparison-panel">
+        <div className="ranking-header">
+          <div>
+            <span>Evolução no período</span>
+            <h2>Comparativo de vendas</h2>
+            <p>Pedidos não cancelados distribuídos {timelineGranularity === 'hour' ? 'por hora do dia' : 'por dia'}.</p>
+          </div>
+          <span className="currency-reference">{timelineGranularity === 'hour' ? 'Por hora' : 'Por dia'}</span>
+        </div>
+        <div className="sales-comparison-chart-area">
+          {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando comparativo...</div>
+            : timelineError ? <div className="dashboard-empty"><AlertTriangle size={26} /><strong>Comparativo indisponível</strong><span>{timelineError}</span></div>
+              : timelineRows.length > 0 ? <Line data={salesTimelineChartData} options={salesTimelineChartOptions} />
+                : <div className="dashboard-empty"><ChartNoAxesCombined size={28} /><strong>Sem vendas no período</strong><span>O gráfico será preenchido quando houver pedidos não cancelados.</span></div>}
+        </div>
+      </article>
 
       <div className="analytics-grid">
         <article className="performance-panel cpa-ranking-panel">
