@@ -485,9 +485,16 @@ function Dashboard({ theme }) {
   }
 
   const timelineGranularity = timelineRows[0]?.granularity
-    || (appliedFilters.start === appliedFilters.end ? 'hour' : 'day')
+    || (selectedDays(appliedFilters) <= 2 ? 'hour' : 'day')
+  const timelineSpansMultipleDays = timelineGranularity === 'hour'
+    && appliedFilters.start !== appliedFilters.end
   const timelineLabelFormatter = new Intl.DateTimeFormat('pt-BR', timelineGranularity === 'hour'
-    ? { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }
+    ? {
+      ...(timelineSpansMultipleDays ? { day: '2-digit', month: '2-digit' } : {}),
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/Sao_Paulo',
+    }
     : { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
   const salesTimelineChartData = {
     labels: timelineRows.map((row) => timelineLabelFormatter.format(new Date(row.bucket_start))),
