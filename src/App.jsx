@@ -349,11 +349,26 @@ function rate(value, suffix = '%') {
   return value === null || value === undefined ? '—' : `${decimal(value)}${suffix}`
 }
 
+function includesFullCalendarMonth(filters) {
+  const start = dateFromValue(filters.start)
+  const end = dateFromValue(filters.end)
+  if (!start || !end) return false
+  const firstFullMonth = start.getDate() === 1
+    ? new Date(start.getFullYear(), start.getMonth(), 1, 12)
+    : new Date(start.getFullYear(), start.getMonth() + 1, 1, 12)
+  const firstFullMonthEnd = new Date(
+    firstFullMonth.getFullYear(),
+    firstFullMonth.getMonth() + 1,
+    0,
+    12,
+  )
+  return firstFullMonthEnd <= end
+}
+
 function comparisonModeFor(filters) {
   const days = selectedDays(filters)
   if (days <= 7) return 'day_hours'
-  if (days <= 29) return 'week_days'
-  return 'month_days'
+  return includesFullCalendarMonth(filters) ? 'month_days' : 'week_days'
 }
 
 function comparisonSeriesLabel(mode, startValue) {
@@ -601,7 +616,15 @@ function Dashboard({ theme }) {
         },
         onLeave: (event, _item, legend) => {
           if (event.native?.target) event.native.target.style.cursor = 'default'
-          highlightComparisonSeries(legend)
+          highlightComparisonSeries(legend, legend.chart.$comparisonPinned ?? null)
+        },
+        onClick: (_event, item, legend) => {
+          const chart = legend.chart
+          const nextPinned = chart.$comparisonPinned === item.datasetIndex
+            ? null
+            : item.datasetIndex
+          chart.$comparisonPinned = nextPinned
+          highlightComparisonSeries(legend, nextPinned)
         },
       },
       tooltip: {
@@ -731,7 +754,7 @@ function Dashboard({ theme }) {
         <div className="sales-comparison-chart-area">
           {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando comparativo...</div>
             : timelineError ? <div className="dashboard-empty"><AlertTriangle size={26} /><strong>Comparativo indisponível</strong><span>{timelineError}</span></div>
-              : timelineRows.length > 0 ? <Line data={salesTimelineChartData} options={salesTimelineChartOptions} />
+              : timelineRows.length > 0 ? <Line key={`${appliedFilters.start}:${appliedFilters.end}`} data={salesTimelineChartData} options={salesTimelineChartOptions} />
                 : <div className="dashboard-empty"><ChartNoAxesCombined size={28} /><strong>Sem vendas no período</strong><span>O gráfico será preenchido quando houver pedidos não cancelados.</span></div>}
         </div>
       </article>
