@@ -227,7 +227,36 @@ form { display: grid; gap: 18px; }
 .cash-submit-button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 27px rgba(232,93,4,.3); }
 .cash-history-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .dashboard-pre-option { display: flex; flex: 0 0 auto; align-items: center; min-height: 62px; padding: 10px 13px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); box-shadow: 0 9px 30px rgba(27,18,12,.04); }
-.pre-retention-note, .pre-timezone-note { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.pre-retention-note { color: var(--muted); font-size: 12px; line-height: 1.6; }
+.pre-datetime-picker { display: grid; gap: 8px; min-width: 0; }
+.pre-appointments-page .cash-modal:not(.cash-delete-modal) { max-height: calc(100dvh - 44px); overflow-y: auto; scrollbar-gutter: stable; }
+.pre-datetime-picker > label { color: var(--ink); font-size: 12px; font-weight: 750; }
+.pre-datetime-trigger { width: 100%; min-height: 48px; display: flex; align-items: center; gap: 11px; padding: 7px 12px 7px 8px; color: var(--ink); border: 1px solid var(--border); border-radius: 11px; background: var(--surface-subtle); font-size: 13px; font-weight: 650; text-align: left; transition: border-color .2s, box-shadow .2s; }
+.pre-datetime-trigger:hover:not(:disabled), .pre-datetime-picker.open .pre-datetime-trigger { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(255,122,26,.12); }
+.pre-datetime-icon { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; color: var(--orange-dark); border-radius: 8px; background: var(--orange-soft); }
+.pre-datetime-chevron { margin-left: auto; flex: 0 0 auto; color: var(--muted); transition: transform .2s; }
+.pre-datetime-picker.open .pre-datetime-chevron { transform: rotate(180deg); }
+.pre-datetime-panel { overflow: hidden; color: var(--ink); border: 1px solid var(--border-strong); border-radius: 14px; background: var(--surface); box-shadow: 0 10px 30px rgba(20,13,8,.08); animation: calendar-in .18s ease-out; }
+.pre-datetime-panel .rdp-root { --rdp-accent-color: var(--orange-dark); --rdp-accent-background-color: var(--orange-soft); --rdp-day-height: 36px; --rdp-day-width: 36px; --rdp-day_button-height: 32px; --rdp-day_button-width: 32px; --rdp-day_button-border-radius: 9px; margin: 14px auto 12px; width: fit-content; font-size: 12px; }
+.pre-datetime-panel .rdp-month_caption { color: var(--ink); font: 750 14px/1 'Manrope', sans-serif; }
+.pre-datetime-panel .rdp-weekday { color: var(--muted); font-size: 10px; font-weight: 750; }
+.pre-datetime-panel .rdp-day_button { color: var(--ink); font-weight: 650; transition: background .15s, color .15s; }
+.pre-datetime-panel .rdp-day_button:hover { color: var(--orange-dark); background: var(--orange-soft); }
+.pre-datetime-panel .rdp-selected .rdp-day_button { color: #211005; border-color: var(--orange); background: var(--orange); font-weight: 850; box-shadow: 0 4px 12px rgba(255,122,26,.2); }
+.pre-datetime-panel .rdp-outside:not(.rdp-selected) .rdp-day_button { color: var(--muted); opacity: .5; }
+.pre-datetime-panel .rdp-today:not(.rdp-selected) .rdp-day_button { color: var(--orange-dark); border: 1px solid var(--orange); }
+.pre-datetime-panel .rdp-button_previous, .pre-datetime-panel .rdp-button_next { color: var(--orange-dark); border: 1px solid var(--border); border-radius: 8px; background: var(--surface-subtle); }
+.pre-datetime-time { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--surface-subtle); }
+.pre-datetime-time > span { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 700; }
+.pre-datetime-time > span svg { color: var(--orange-dark); }
+.pre-datetime-time-fields { display: flex; align-items: center; gap: 8px; }
+.pre-datetime-time-fields select { width: 58px; height: 38px; padding-left: 10px; color: var(--ink); border: 1px solid var(--border-strong); border-radius: 8px; background: var(--surface); font-size: 14px; font-weight: 750; }
+.pre-datetime-time-fields b { color: var(--muted); }
+.pre-datetime-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--border); }
+.pre-datetime-footer button { min-height: 35px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border-radius: 8px; font-size: 12px; font-weight: 750; }
+.pre-datetime-now { color: var(--orange-dark); border: 1px solid var(--border); background: var(--surface-subtle); }
+.pre-datetime-done { color: #211005; border: 1px solid var(--orange); background: var(--orange); }
+.pre-datetime-picker button:focus-visible, .pre-datetime-time-fields select:focus-visible { outline: 3px solid rgba(255,122,26,.4); outline-offset: 2px; }
 .pre-switch-label { position: relative; display: inline-flex; align-items: center; gap: 11px; color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 750; }
 .pre-switch-label input { position: absolute; width: 42px; height: 24px; margin: 0; opacity: 0; cursor: pointer; }
 .pre-switch-track { display: inline-block; flex: 0 0 auto; width: 42px; height: 24px; padding: 3px; border: 1px solid var(--border-strong); border-radius: 20px; background: var(--surface-subtle); transition: background .2s; }

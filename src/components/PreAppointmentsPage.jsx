@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { preAppointmentInputValue, preAppointmentTimestamp } from '../lib/preAppointments'
+import PreAppointmentDateTimePicker from './PreAppointmentDateTimePicker'
 
 const pageSize = 25
 const expiryFormatter = new Intl.DateTimeFormat('pt-BR', {
@@ -452,21 +453,13 @@ export default function PreAppointmentsPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="cash-field">
-                    <label htmlFor="pre-date">Data e hora</label>
-                    <input
-                      id="pre-date"
-                      type="datetime-local"
-                      step="60"
-                      required
-                      value={form.appointment_at}
-                      onChange={(event) => setForm({ ...form, appointment_at: event.target.value })}
-                    />
-                    <small className="pre-timezone-note">
-                      Horário de Brasília. Toda a quantidade será contabilizada neste horário,
-                      inclusive nos marcos.
-                    </small>
-                  </div>
+                  <PreAppointmentDateTimePicker
+                    value={form.appointment_at}
+                    onChange={(appointment_at) =>
+                      setForm((current) => ({ ...current, appointment_at }))
+                    }
+                    disabled={saving}
+                  />
                   <small className="pre-retention-note">
                     {modal === 'new'
                       ? 'Válido por 15 dias após salvar.'
