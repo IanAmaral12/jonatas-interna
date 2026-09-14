@@ -11,24 +11,19 @@ import {
   X,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { preAppointmentInputValue, preAppointmentTimestamp } from '../lib/preAppointments'
 
 const pageSize = 25
-const dateFormatter = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short' })
 const expiryFormatter = new Intl.DateTimeFormat('pt-BR', {
   dateStyle: 'short',
   timeStyle: 'short',
   timeZone: 'America/Sao_Paulo',
 })
 function todayValue() {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date())
+  return preAppointmentInputValue(new Date())
 }
 function formatDate(value) {
-  return dateFormatter.format(new Date(`${value}T12:00:00`))
+  return expiryFormatter.format(new Date(value))
 }
 
 export default function PreAppointmentsPage() {
@@ -40,7 +35,7 @@ export default function PreAppointmentsPage() {
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [modal, setModal] = useState(null)
-  const [form, setForm] = useState({ seller_id: '', quantity: '', appointment_date: todayValue() })
+  const [form, setForm] = useState({ seller_id: '', quantity: '', appointment_at: todayValue() })
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [entryToDelete, setEntryToDelete] = useState(null)
@@ -57,8 +52,8 @@ export default function PreAppointmentsPage() {
           supabase.rpc('get_dashboard_sellers'),
           supabase
             .from('pre_appointments')
-            .select('id,seller_id,quantity,appointment_date,expires_at', { count: 'exact' })
-            .order('appointment_date', { ascending: false })
+            .select('id,seller_id,quantity,appointment_at,expires_at', { count: 'exact' })
+            .order('appointment_at', { ascending: false })
             .order('created_at', { ascending: false })
             .order('id')
             .range(page * pageSize, (page + 1) * pageSize - 1),
@@ -137,9 +132,9 @@ export default function PreAppointmentsPage() {
         ? {
             seller_id: entry.seller_id,
             quantity: String(entry.quantity),
-            appointment_date: entry.appointment_date,
+            appointment_at: preAppointmentInputValue(entry.appointment_at),
           }
-        : { seller_id: sellers[0]?.id || '', quantity: '', appointment_date: todayValue() },
+        : { seller_id: sellers[0]?.id || '', quantity: '', appointment_at: todayValue() },
     )
     setModal(entry || 'new')
   }
@@ -156,16 +151,20 @@ export default function PreAppointmentsPage() {
       quantity < 1 ||
       quantity > 1000000 ||
       !form.seller_id ||
-      !form.appointment_date
+      !preAppointmentTimestamp(form.appointment_at)
     ) {
-      setFormError('Selecione vendedor, data e uma quantidade inteira maior que zero.')
+      setFormError('Selecione vendedor, data e hora e uma quantidade inteira maior que zero.')
       return
     }
     busyRef.current = true
     setSaving(true)
     setFormError('')
     try {
-      const payload = { ...form, quantity }
+      const payload = {
+        ...form,
+        quantity,
+        appointment_at: preAppointmentTimestamp(form.appointment_at),
+      }
       const query =
         modal === 'new'
           ? supabase.from('pre_appointments').insert(payload)
@@ -211,7 +210,9 @@ export default function PreAppointmentsPage() {
         <div>
           <span className="dashboard-eyebrow">Planejamento comercial</span>
           <h1>Pré-agendamentos</h1>
-          <p>Lance quantidades por vendedor e dia para acompanhar o potencial da operação.</p>
+          <p>
+            Lance quantidades por vendedor, data e hora para acompanhar o potencial da operação.
+          </p>
         </div>
         <span className="pre-retention-badge">
           <CalendarDays size={16} /> Validade de 15 dias
@@ -261,7 +262,7 @@ export default function PreAppointmentsPage() {
             <table className="pre-table">
               <thead>
                 <tr>
-                  <th>Data</th>
+                  <th>Data e hora</th>
                   <th>Vendedor</th>
                   <th>Pré-agendamentos</th>
                   <th>Expira em</th>
@@ -273,7 +274,7 @@ export default function PreAppointmentsPage() {
               <tbody>
                 {entries.map((entry) => (
                   <tr key={entry.id}>
-                    <td data-label="Data">{formatDate(entry.appointment_date)}</td>
+                    <td data-label="Data e hora">{formatDate(entry.appointment_at)}</td>
                     <td data-label="Vendedor" className="pre-seller-cell">
                       {sellerName(entry.seller_id)}
                     </td>
@@ -288,7 +289,7 @@ export default function PreAppointmentsPage() {
                         <button
                           type="button"
                           title="Editar lançamento"
-                          aria-label={`Editar lançamento de ${sellerName(entry.seller_id)} em ${formatDate(entry.appointment_date)}`}
+                          aria-label={`Editar lançamento de ${sellerName(entry.seller_id)} em ${formatDate(entry.appointment_at)}`}
                           onClick={() => openForm(entry)}
                         >
                           <Pencil size={16} />
@@ -296,7 +297,7 @@ export default function PreAppointmentsPage() {
                         <button
                           type="button"
                           title="Excluir lançamento"
-                          aria-label={`Excluir lançamento de ${sellerName(entry.seller_id)} em ${formatDate(entry.appointment_date)}`}
+                          aria-label={`Excluir lançamento de ${sellerName(entry.seller_id)} em ${formatDate(entry.appointment_at)}`}
                           onClick={() => {
                             setFormError('')
                             setEntryToDelete(entry)
@@ -364,7 +365,7 @@ export default function PreAppointmentsPage() {
                 <h2 id="pre-modal-title">Excluir pré-agendamento?</h2>
                 <p>
                   {entryToDelete.quantity} pré-agendamentos de {sellerName(entryToDelete.seller_id)}
-                  , em {formatDate(entryToDelete.appointment_date)}, serão removidos das contagens.
+                  , em {formatDate(entryToDelete.appointment_at)}, serão removidos das contagens.
                 </p>
                 {formError && (
                   <div className="cash-flow-message error" role="alert">
@@ -452,16 +453,19 @@ export default function PreAppointmentsPage() {
                     </select>
                   </div>
                   <div className="cash-field">
-                    <label htmlFor="pre-date">Data</label>
+                    <label htmlFor="pre-date">Data e hora</label>
                     <input
                       id="pre-date"
-                      type="date"
+                      type="datetime-local"
+                      step="60"
                       required
-                      value={form.appointment_date}
-                      onChange={(event) =>
-                        setForm({ ...form, appointment_date: event.target.value })
-                      }
+                      value={form.appointment_at}
+                      onChange={(event) => setForm({ ...form, appointment_at: event.target.value })}
                     />
+                    <small className="pre-timezone-note">
+                      Horário de Brasília. Toda a quantidade será contabilizada neste horário,
+                      inclusive nos marcos.
+                    </small>
                   </div>
                   <small className="pre-retention-note">
                     {modal === 'new'

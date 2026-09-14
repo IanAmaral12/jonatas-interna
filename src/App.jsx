@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import PreAppointmentsPage from './components/PreAppointmentsPage'
-import { includePreAppointments, includePreTimeline, includePreSellerTimeline } from './lib/preAppointments'
+import { includePreAppointments } from './lib/preAppointments'
 import {
   AlertTriangle,
   ArrowDownLeft,
@@ -76,10 +76,14 @@ const salesMilestonePlugin = {
         const point = meta.data[dataIndex]
         if (!point || point.skip) return
         const horizontalOffset = (milestoneIndex - (milestonesInBucket - 1) / 2) * 15
-        const x = Math.min(
-          Math.max(point.x + horizontalOffset, chart.chartArea.left + 9),
-          chart.chartArea.right - 9,
+        // Keep the whole group inside the chart instead of clamping each star
+        // independently (which stacked several batch milestones at the edges).
+        const groupHalfWidth = (milestonesInBucket - 1) * 15 / 2
+        const anchorX = Math.min(
+          Math.max(point.x, chart.chartArea.left + 9 + groupHalfWidth),
+          chart.chartArea.right - 9 - groupHalfWidth,
         )
+        const x = anchorX + horizontalOffset
         const markerText = '★'
 
         chart.ctx.save()
@@ -542,8 +546,8 @@ function Dashboard({ theme }) {
   const [filters, setFilters] = useState({ start: today, end: today })
   const [appliedFilters, setAppliedFilters] = useState({ start: today, end: today })
   const [rows, setRows] = useState([])
-  const [rawTimelineRows, setTimelineRows] = useState([])
-  const [rawSellerTimelineRows, setSellerTimelineRows] = useState([])
+  const [timelineRows, setTimelineRows] = useState([])
+  const [sellerTimelineRows, setSellerTimelineRows] = useState([])
   const [preEntries, setPreEntries] = useState([])
   const [includePre, setIncludePre] = useState(false)
   const [revision, setRevision] = useState(0)
@@ -604,10 +608,12 @@ function Dashboard({ theme }) {
         supabase.rpc('get_orders_sales_timeline', {
           ...queryParams,
           p_seller_id: sellerId,
+          p_include_pre: includePre,
         }),
         supabase.rpc('get_seller_sales_timeline', {
           ...queryParams,
           p_seller_id: sellerId,
+          p_include_pre: includePre,
         }),
         includePre ? supabase.rpc('get_pre_appointment_totals', queryParams)
           : Promise.resolve({ data: [], error: null }),
@@ -638,7 +644,7 @@ function Dashboard({ theme }) {
           average_ticket: row.average_ticket === null ? null : Number(row.average_ticket),
         })))
       }
-      if (timelineResult.error) {
+      if (timelineResult.error || preResult.error) {
         setTimelineError('Não foi possível carregar o comparativo de vendas.')
         setTimelineRows([])
       } else {
@@ -648,7 +654,7 @@ function Dashboard({ theme }) {
           bucket_index: Number(row.bucket_index),
         })))
       }
-      if (sellerTimelineResult.error) {
+      if (sellerTimelineResult.error || preResult.error) {
         setSellerTimelineError('Não foi possível carregar o comparativo por vendedor.')
         setSellerTimelineRows([])
       } else {
@@ -665,12 +671,6 @@ function Dashboard({ theme }) {
   }, [appliedFilters, appliedSellerId, includePre, revision])
 
   const dashboardRows = includePre ? includePreAppointments(rows, preEntries) : rows
-  const scopedPreEntries = appliedSellerId === 'all' ? preEntries
-    : preEntries.filter((entry) => entry.seller_id === appliedSellerId)
-  const timelineMode = rawTimelineRows[0]?.comparison_mode || comparisonModeFor(appliedFilters)
-  const sellerTimelineMode = rawSellerTimelineRows[0]?.comparison_mode || sellerComparisonModeFor(appliedFilters)
-  const timelineRows = includePre ? includePreTimeline(rawTimelineRows, scopedPreEntries, timelineMode) : rawTimelineRows
-  const sellerTimelineRows = includePre ? includePreSellerTimeline(rawSellerTimelineRows, scopedPreEntries, sellerTimelineMode) : rawSellerTimelineRows
   const currencyRows = dashboardRows.filter((row) => row.currency === currency)
   const scopedCurrencyRows = appliedSellerId === 'all'
     ? currencyRows
@@ -1079,17 +1079,15 @@ function Dashboard({ theme }) {
               </div>
             )}
           </div>
+          <div className="dashboard-pre-option" title={includePre ? `${summary.preAppointments} pré-agendamentos no período e vendedor selecionados` : 'Exibindo apenas pedidos não cancelados'}>
+            <label className="pre-switch-label">
+              <input type="checkbox" role="switch" checked={includePre} onChange={(event) => setIncludePre(event.target.checked)} />
+              <span className="pre-switch-track" aria-hidden="true" />
+              <span>Contabilizar<br />Pré Agendamentos</span>
+            </label>
+          </div>
         </div>
       </header>
-
-      <div className="dashboard-pre-option">
-        <label className="pre-switch-label">
-          <input type="checkbox" role="switch" checked={includePre} onChange={(event) => setIncludePre(event.target.checked)} />
-          <span className="pre-switch-track" aria-hidden="true" />
-          <span>Contabilizar Pré Agendamentos</span>
-        </label>
-        <small>{includePre ? `${summary.preAppointments} pré-agendamentos no período e vendedor selecionados` : 'Exibindo apenas pedidos não cancelados'}</small>
-      </div>
 
       {error && <div className="dashboard-alert error"><AlertTriangle size={18} />{error}</div>}
 
@@ -1165,9 +1163,6 @@ function Dashboard({ theme }) {
             ? 'Dias por hora'
             : comparisonMode === 'week_days' ? 'Semanas por dia' : 'Meses por dia'}</span>
         </div>
-        {includePre && summary.preAppointments > 0 && comparisonMode === 'day_hours' && (
-          <p className="pre-chart-note">+ {summary.preAppointments} pré-agendamentos contabilizados nas métricas. Como não possuem horário, não entram nas linhas horárias nem nos marcos.</p>
-        )}
         <div className="sales-comparison-chart-area">
           {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando comparativo...</div>
             : timelineError ? <div className="dashboard-empty"><AlertTriangle size={26} /><strong>Comparativo indisponível</strong><span>{timelineError}</span></div>
@@ -1210,14 +1205,6 @@ function Dashboard({ theme }) {
                 ? 'Por dia'
                 : sellerComparisonMode === 'seller_weeks' ? 'Por semana' : 'Por mês'}</span>
           </div>
-          {includePre && summary.preAppointments > 0 && sellerComparisonMode === 'seller_hours' && (
-            <p className="pre-chart-note">Pré-agendamentos sem horário: {scopedPreEntries.reduce((totals, entry) => {
-              const index = totals.findIndex((item) => item.id === entry.seller_id)
-              if (index < 0) totals.push({ id: entry.seller_id, name: entry.seller_name, quantity: Number(entry.quantity) })
-              else totals[index].quantity += Number(entry.quantity)
-              return totals
-            }, []).map((seller) => `${seller.name}: ${seller.quantity}`).join(' · ')}.</p>
-          )}
           <div className="seller-sales-chart-area">
             {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando métricas...</div>
               : sellerTimelineError ? <div className="dashboard-empty"><AlertTriangle size={26} /><strong>Comparativo indisponível</strong><span>{sellerTimelineError}</span></div>

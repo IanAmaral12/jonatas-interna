@@ -150,7 +150,7 @@ total de entradas, total de saídas, saldo atual e o histórico dos lançamentos
 ### Pré-agendamentos
 
 A página **Pré-agendamentos** permite criar, editar e excluir lançamentos de
-quantidade inteira positiva por vendedor cadastrado e data. Vários lançamentos
+quantidade inteira positiva por vendedor cadastrado, data e hora. Vários lançamentos
 do mesmo vendedor/dia são somados. Não há integração nem criação de pedidos.
 
 `pre_appointments` possui RLS para usuários autenticados, autoria automática e
@@ -166,7 +166,15 @@ baseados nos dados reais. O RPC `get_pre_appointment_totals` agrega por vendedor
 e dia, sem o limite de paginação de linhas da API, e a dashboard atualiza a cada
 minuto enquanto a chave está ativa.
 
-Os gráficos por dia/semana/mês incluem os pré-agendamentos. Como os lançamentos
-não possuem hora, os gráficos horários mostram apenas pedidos reais e indicam
-os totais de pré-agendamentos separadamente; os marcos não recebem horários
-fictícios. Execute `npm test` para verificar a combinação das métricas e séries.
+`appointment_at` é um `timestamptz`, preenchido com data e hora de Brasília.
+Os gráficos horários, diários, semanais e mensais incluem os pré-agendamentos
+quando a chave está ligada. Os RPCs de séries possuem uma sobrecarga com
+`p_include_pre`; desligada, preserva exatamente a série original de pedidos.
+Ligada, soma eventos reais e lançamentos manuais em ordem cronológica: toda a
+quantidade de um lançamento ocorre no instante informado e pode atravessar
+vários marcos de 10 no mesmo minuto. Cada estrela informa o horário real em que
+o total combinado atingiu o marco, inclusive quando um pré-agendamento antecipa
+um marco que será concluído por um pedido real. A expiração continua sendo
+15 dias após a criação, não após a data agendada.
+
+Execute `npm test` para verificar a combinação das métricas, séries e marcos.

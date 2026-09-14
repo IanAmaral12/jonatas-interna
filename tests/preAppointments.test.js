@@ -1,10 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  includePreAppointments,
-  includePreTimeline,
-  includePreSellerTimeline,
-} from '../src/lib/preAppointments.js'
+import { includePreAppointments } from '../src/lib/preAppointments.js'
 
 const entries = [
   { seller_id: 'pedro', seller_name: 'Pedro', appointment_date: '2026-09-02', quantity: 6 },
@@ -64,83 +60,4 @@ test('pre-only sellers appear with no fabricated investment or revenue and safe 
 
 test('empty pre totals preserve all existing metrics and API rounding', () => {
   assert.deepEqual(includePreAppointments([sellerRow], []), [{ ...sellerRow, pre_appointments: 0 }])
-})
-
-test('hourly charts remain real orders only; no fake time or milestones', () => {
-  const hours = [
-    { bucket_start: '2026-09-02T17:00:00+00:00', sales: 10, milestones: [{ threshold: 10 }] },
-  ]
-  assert.strictEqual(includePreTimeline(hours, entries, 'day_hours'), hours)
-  assert.strictEqual(includePreSellerTimeline(hours, entries, 'seller_hours'), hours)
-})
-
-test('daily comparisons merge using São Paulo date and create new dates correctly', () => {
-  const rows = [
-    {
-      bucket_start: '2026-09-02T03:00:00+00:00',
-      series_start: '2026-08-30',
-      bucket_index: 3,
-      sales: 10,
-    },
-  ]
-  const result = includePreTimeline(rows, entries, 'week_days')
-  assert.equal(result.length, 2)
-  assert.equal(result[0].sales, 16)
-  assert.equal(result[1].sales, 9)
-  assert.equal(result[1].series_start, '2026-08-30')
-  assert.equal(result[1].bucket_index, 4)
-  assert.equal(rows[0].sales, 10)
-  const month = includePreTimeline([], entries, 'month_days')
-  assert.equal(month[0].series_start, '2026-09-01')
-  assert.equal(month[0].bucket_index, 1)
-})
-
-test('seller comparisons include pre-only sellers, zero-fill and retain filtered totals', () => {
-  const rows = [
-    {
-      bucket_start: '2026-09-02T03:00:00+00:00',
-      seller_id: 'pedro',
-      seller_name: 'Pedro',
-      sales: 10,
-    },
-  ]
-  const result = includePreSellerTimeline(rows, entries, 'seller_days')
-  assert.equal(result.length, 4)
-  assert.equal(
-    result.find((row) => row.seller_id === 'wesley' && row.bucket_start.startsWith('2026-09-02'))
-      .sales,
-    0,
-  )
-  assert.equal(
-    result.reduce((sum, row) => sum + row.sales, 0),
-    25,
-  )
-  const filtered = includePreSellerTimeline(
-    rows,
-    entries.filter((entry) => entry.seller_id === 'pedro'),
-    'seller_days',
-  )
-  assert.ok(filtered.every((row) => row.seller_id === 'pedro'))
-  assert.equal(
-    filtered.reduce((sum, row) => sum + row.sales, 0),
-    20,
-  )
-})
-
-test('seller charts aggregate Sunday weeks and calendar months without duplicate timestamp buckets', () => {
-  const rows = [
-    {
-      bucket_start: '2026-08-30T03:00:00+00:00',
-      seller_id: 'pedro',
-      seller_name: 'Pedro',
-      sales: 10,
-    },
-  ]
-  const week = includePreSellerTimeline(rows, entries, 'seller_weeks')
-  assert.equal(week.length, 2)
-  assert.equal(week.find((row) => row.seller_id === 'pedro').sales, 20)
-  assert.equal(week.find((row) => row.seller_id === 'wesley').sales, 5)
-  const month = includePreSellerTimeline([], entries, 'seller_months')
-  assert.equal(month.length, 2)
-  assert.ok(month.every((row) => row.bucket_start.startsWith('2026-09-01')))
 })

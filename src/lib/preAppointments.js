@@ -1,4 +1,26 @@
-// Counts are additive only. Never infer revenue or an hourly timestamp from a date.
+// Counts are additive only. Revenue always comes from real orders.
+export function preAppointmentInputValue(timestamp) {
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return ''
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(date)
+  const get = (type) => parts.find((part) => part.type === type).value
+  return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`
+}
+
+export function preAppointmentTimestamp(value) {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)) return null
+  const timestamp = `${value}:00-03:00`
+  return preAppointmentInputValue(timestamp) === value ? timestamp : null
+}
+
 export function includePreAppointments(rows, entries) {
   const bySeller = new Map()
   for (const entry of entries) {
@@ -67,91 +89,4 @@ function recalculate(row, preCount) {
     lead_to_appointment_ratio: appointments > 0 && row.leads > 0 ? row.leads / appointments : null,
     average_ticket: appointments > 0 ? row.revenue / appointments : null,
   }
-}
-
-function weekStart(value) {
-  const date = new Date(`${value}T12:00:00Z`)
-  date.setUTCDate(date.getUTCDate() - date.getUTCDay())
-  return date.toISOString().slice(0, 10)
-}
-
-function bucketDate(value, mode) {
-  if (mode === 'seller_weeks') return weekStart(value)
-  if (mode === 'seller_months') return `${value.slice(0, 7)}-01`
-  return value
-}
-
-function saoPauloDate(timestamp) {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Sao_Paulo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date(timestamp))
-  const get = (type) => parts.find((part) => part.type === type).value
-  return `${get('year')}-${get('month')}-${get('day')}`
-}
-
-export function includePreTimeline(rows, entries, mode) {
-  if (mode === 'day_hours') return rows
-  const result = rows.map((row) => ({ ...row }))
-  for (const entry of entries) {
-    let row = result.find((item) => saoPauloDate(item.bucket_start) === entry.appointment_date)
-    if (!row) {
-      const date = new Date(`${entry.appointment_date}T12:00:00Z`)
-      row = {
-        bucket_start: `${entry.appointment_date}T00:00:00-03:00`,
-        sales: 0,
-        granularity: 'day',
-        comparison_mode: mode,
-        milestones: [],
-        series_start:
-          mode === 'week_days'
-            ? weekStart(entry.appointment_date)
-            : `${entry.appointment_date.slice(0, 7)}-01`,
-        bucket_index: mode === 'week_days' ? date.getUTCDay() : date.getUTCDate() - 1,
-      }
-      result.push(row)
-    }
-    row.sales += Number(entry.quantity)
-  }
-  return result.sort((a, b) => Date.parse(a.bucket_start) - Date.parse(b.bucket_start))
-}
-
-export function includePreSellerTimeline(rows, entries, mode) {
-  if (mode === 'seller_hours') return rows
-  const result = rows.map((row) => ({ ...row }))
-  // Match by local bucket date, not timestamp string formatting returned by PostgREST.
-  const buckets = new Map(result.map((row) => [saoPauloDate(row.bucket_start), row.bucket_start]))
-  const sellers = new Map(result.map((row) => [row.seller_id, row.seller_name]))
-  for (const entry of entries) {
-    const date = bucketDate(entry.appointment_date, mode)
-    if (!buckets.has(date)) buckets.set(date, `${date}T00:00:00-03:00`)
-    sellers.set(entry.seller_id, entry.seller_name)
-  }
-  const keyed = new Map(
-    result.map((row) => [`${row.seller_id}:${saoPauloDate(row.bucket_start)}`, row]),
-  )
-  for (const [date, timestamp] of buckets) {
-    for (const [id, name] of sellers) {
-      const key = `${id}:${date}`
-      if (!keyed.has(key)) {
-        const row = {
-          bucket_start: timestamp,
-          seller_id: id,
-          seller_name: name,
-          sales: 0,
-          comparison_mode: mode,
-        }
-        keyed.set(key, row)
-        result.push(row)
-      }
-    }
-  }
-  for (const entry of entries) {
-    keyed.get(`${entry.seller_id}:${bucketDate(entry.appointment_date, mode)}`).sales += Number(
-      entry.quantity,
-    )
-  }
-  return result.sort((a, b) => Date.parse(a.bucket_start) - Date.parse(b.bucket_start))
 }
