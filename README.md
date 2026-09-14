@@ -146,3 +146,27 @@ descrição, tipo, data automática e o usuário do Supabase responsável pela c
 
 Os dados ficam em `cash_flow_entries`, protegidos por RLS. O frontend mostra o
 total de entradas, total de saídas, saldo atual e o histórico dos lançamentos.
+
+### Pré-agendamentos
+
+A página **Pré-agendamentos** permite criar, editar e excluir lançamentos de
+quantidade inteira positiva por vendedor cadastrado e data. Vários lançamentos
+do mesmo vendedor/dia são somados. Não há integração nem criação de pedidos.
+
+`pre_appointments` possui RLS para usuários autenticados, autoria automática e
+validade de 15 dias **após a criação**, independentemente da data informada.
+Editar não renova a validade. Registros expirados ficam imediatamente fora das
+consultas e um job horário do pg_cron os exclui permanentemente.
+
+Na dashboard, a chave **Contabilizar Pré Agendamentos** começa desligada. Quando
+ativada, soma os lançamentos válidos aos pedidos não cancelados, respeitando os
+filtros de data e vendedor. Contagens, CPA, conversão e ticket médio utilizam a
+quantidade combinada; investimento, conversas, CPL, faturamento e ROAS continuam
+baseados nos dados reais. O RPC `get_pre_appointment_totals` agrega por vendedor
+e dia, sem o limite de paginação de linhas da API, e a dashboard atualiza a cada
+minuto enquanto a chave está ativa.
+
+Os gráficos por dia/semana/mês incluem os pré-agendamentos. Como os lançamentos
+não possuem hora, os gráficos horários mostram apenas pedidos reais e indicam
+os totais de pré-agendamentos separadamente; os marcos não recebem horários
+fictícios. Execute `npm test` para verificar a combinação das métricas e séries.

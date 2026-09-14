@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import PreAppointmentsPage from './components/PreAppointmentsPage'
+import { includePreAppointments, includePreTimeline, includePreSellerTimeline } from './lib/preAppointments'
 import {
   AlertTriangle,
   ArrowDownLeft,
@@ -540,8 +542,11 @@ function Dashboard({ theme }) {
   const [filters, setFilters] = useState({ start: today, end: today })
   const [appliedFilters, setAppliedFilters] = useState({ start: today, end: today })
   const [rows, setRows] = useState([])
-  const [timelineRows, setTimelineRows] = useState([])
-  const [sellerTimelineRows, setSellerTimelineRows] = useState([])
+  const [rawTimelineRows, setTimelineRows] = useState([])
+  const [rawSellerTimelineRows, setSellerTimelineRows] = useState([])
+  const [preEntries, setPreEntries] = useState([])
+  const [includePre, setIncludePre] = useState(false)
+  const [revision, setRevision] = useState(0)
   const [sellerOptions, setSellerOptions] = useState([])
   const [appliedSellerId, setAppliedSellerId] = useState('all')
   const [draftSellerId, setDraftSellerId] = useState('all')
@@ -551,6 +556,12 @@ function Dashboard({ theme }) {
   const [timelineError, setTimelineError] = useState('')
   const [sellerTimelineError, setSellerTimelineError] = useState('')
   const currency = 'BRL'
+
+  useEffect(() => {
+    if (!includePre) return undefined
+    const timer = window.setInterval(() => setRevision((value) => value + 1), 60000)
+    return () => window.clearInterval(timer)
+  }, [includePre])
 
   useEffect(() => {
     let active = true
@@ -588,7 +599,7 @@ function Dashboard({ theme }) {
         p_end_date: appliedFilters.end,
       }
       const sellerId = appliedSellerId === 'all' ? null : appliedSellerId
-      const [metricsResult, timelineResult, sellerTimelineResult] = await Promise.all([
+      const [metricsResult, timelineResult, sellerTimelineResult, preResult] = await Promise.all([
         supabase.rpc('get_cpa_dashboard', queryParams),
         supabase.rpc('get_orders_sales_timeline', {
           ...queryParams,
@@ -598,9 +609,15 @@ function Dashboard({ theme }) {
           ...queryParams,
           p_seller_id: sellerId,
         }),
+        includePre ? supabase.rpc('get_pre_appointment_totals', queryParams)
+          : Promise.resolve({ data: [], error: null }),
       ])
 
       if (!active) return
+      setPreEntries(preResult.error ? [] : preResult.data || [])
+      if (preResult.error) {
+        setError('Não foi possível carregar os pré-agendamentos. Os valores abaixo incluem apenas pedidos reais.')
+      }
       if (metricsResult.error) {
         setError('Não foi possível carregar os dados do dashboard.')
         setRows([])
@@ -645,19 +662,27 @@ function Dashboard({ theme }) {
 
     loadMetrics()
     return () => { active = false }
-  }, [appliedFilters, appliedSellerId])
+  }, [appliedFilters, appliedSellerId, includePre, revision])
 
-  const currencyRows = rows.filter((row) => row.currency === currency)
+  const dashboardRows = includePre ? includePreAppointments(rows, preEntries) : rows
+  const scopedPreEntries = appliedSellerId === 'all' ? preEntries
+    : preEntries.filter((entry) => entry.seller_id === appliedSellerId)
+  const timelineMode = rawTimelineRows[0]?.comparison_mode || comparisonModeFor(appliedFilters)
+  const sellerTimelineMode = rawSellerTimelineRows[0]?.comparison_mode || sellerComparisonModeFor(appliedFilters)
+  const timelineRows = includePre ? includePreTimeline(rawTimelineRows, scopedPreEntries, timelineMode) : rawTimelineRows
+  const sellerTimelineRows = includePre ? includePreSellerTimeline(rawSellerTimelineRows, scopedPreEntries, sellerTimelineMode) : rawSellerTimelineRows
+  const currencyRows = dashboardRows.filter((row) => row.currency === currency)
   const scopedCurrencyRows = appliedSellerId === 'all'
     ? currencyRows
     : currencyRows.filter((row) => row.seller_id === appliedSellerId)
   const general = appliedSellerId === 'all'
-    ? rows.find((row) => row.currency === currency && row.row_type === 'general')
+    ? dashboardRows.find((row) => row.currency === currency && row.row_type === 'general')
     : scopedCurrencyRows.find((row) => row.seller_id === appliedSellerId)
   const summary = {
     spend: general?.spend || 0,
     leads: general?.leads || 0,
     appointments: general?.appointments || 0,
+    preAppointments: includePre ? general?.pre_appointments || 0 : 0,
     revenue: general?.revenue || 0,
     cpa: general?.cpa ?? null,
     cpl: general?.cpl ?? null,
@@ -1057,6 +1082,15 @@ function Dashboard({ theme }) {
         </div>
       </header>
 
+      <div className="dashboard-pre-option">
+        <label className="pre-switch-label">
+          <input type="checkbox" role="switch" checked={includePre} onChange={(event) => setIncludePre(event.target.checked)} />
+          <span className="pre-switch-track" aria-hidden="true" />
+          <span>Contabilizar Pré Agendamentos</span>
+        </label>
+        <small>{includePre ? `${summary.preAppointments} pré-agendamentos no período e vendedor selecionados` : 'Exibindo apenas pedidos não cancelados'}</small>
+      </div>
+
       {error && <div className="dashboard-alert error"><AlertTriangle size={18} />{error}</div>}
 
       <div className="metric-grid">
@@ -1082,7 +1116,7 @@ function Dashboard({ theme }) {
           <div className="metric-icon"><Users size={20} /></div>
           <div className="metric-label"><span>Agendamentos</span><b>Pedidos</b></div>
           <strong>{summary.appointments}</strong>
-          <small>Todos os pedidos não cancelados</small>
+          <small>{includePre ? `Pedidos não cancelados + ${summary.preAppointments} pré-agendamentos` : 'Todos os pedidos não cancelados'}</small>
         </article>
         <article className="metric-card">
           <div className="metric-icon"><Target size={20} /></div>
@@ -1131,10 +1165,13 @@ function Dashboard({ theme }) {
             ? 'Dias por hora'
             : comparisonMode === 'week_days' ? 'Semanas por dia' : 'Meses por dia'}</span>
         </div>
+        {includePre && summary.preAppointments > 0 && comparisonMode === 'day_hours' && (
+          <p className="pre-chart-note">+ {summary.preAppointments} pré-agendamentos contabilizados nas métricas. Como não possuem horário, não entram nas linhas horárias nem nos marcos.</p>
+        )}
         <div className="sales-comparison-chart-area">
           {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando comparativo...</div>
             : timelineError ? <div className="dashboard-empty"><AlertTriangle size={26} /><strong>Comparativo indisponível</strong><span>{timelineError}</span></div>
-              : hasTimelineSales ? <Line key={`${appliedFilters.start}:${appliedFilters.end}:${appliedSellerId}`} data={salesTimelineChartData} options={salesTimelineChartOptions} plugins={[salesMilestonePlugin]} />
+              : hasTimelineSales ? <Line key={`${appliedFilters.start}:${appliedFilters.end}:${appliedSellerId}:${includePre}`} data={salesTimelineChartData} options={salesTimelineChartOptions} plugins={[salesMilestonePlugin]} />
                 : <div className="dashboard-empty"><ChartNoAxesCombined size={28} /><strong>Sem vendas no período</strong><span>O gráfico será preenchido quando houver pedidos não cancelados.</span></div>}
         </div>
       </article>
@@ -1173,11 +1210,19 @@ function Dashboard({ theme }) {
                 ? 'Por dia'
                 : sellerComparisonMode === 'seller_weeks' ? 'Por semana' : 'Por mês'}</span>
           </div>
+          {includePre && summary.preAppointments > 0 && sellerComparisonMode === 'seller_hours' && (
+            <p className="pre-chart-note">Pré-agendamentos sem horário: {scopedPreEntries.reduce((totals, entry) => {
+              const index = totals.findIndex((item) => item.id === entry.seller_id)
+              if (index < 0) totals.push({ id: entry.seller_id, name: entry.seller_name, quantity: Number(entry.quantity) })
+              else totals[index].quantity += Number(entry.quantity)
+              return totals
+            }, []).map((seller) => `${seller.name}: ${seller.quantity}`).join(' · ')}.</p>
+          )}
           <div className="seller-sales-chart-area">
             {loading ? <div className="dashboard-empty"><LoaderCircle className="spin" size={24} />Atualizando métricas...</div>
               : sellerTimelineError ? <div className="dashboard-empty"><AlertTriangle size={26} /><strong>Comparativo indisponível</strong><span>{sellerTimelineError}</span></div>
                 : sellerComparisonSeries.length > 0
-                  ? <Line key={`${appliedFilters.start}:${appliedFilters.end}:${appliedSellerId}:sellers`} data={sellerSalesChartData} options={sellerSalesChartOptions} />
+                  ? <Line key={`${appliedFilters.start}:${appliedFilters.end}:${appliedSellerId}:sellers:${includePre}`} data={sellerSalesChartData} options={sellerSalesChartOptions} />
                   : <div className="dashboard-empty"><Users size={28} /><strong>Sem vendas no período</strong><span>O comparativo aparecerá quando houver pedidos não cancelados vinculados a vendedores.</span></div>}
           </div>
         </article>
@@ -1666,6 +1711,15 @@ function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
             <WalletCards size={19} />
             <span>Fluxo de caixa</span>
           </button>
+          <button
+            className={`sidebar-nav-item${activePage === 'pre-appointments' ? ' active' : ''}`}
+            type="button"
+            aria-current={activePage === 'pre-appointments' ? 'page' : undefined}
+            onClick={() => setActivePage('pre-appointments')}
+          >
+            <CalendarDays size={19} />
+            <span>Pré-agendamentos</span>
+          </button>
         </nav>
 
         <div className="sidebar-controls">
@@ -1680,7 +1734,8 @@ function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
         </div>
       </aside>
 
-      {activePage === 'dashboard' ? <Dashboard theme={theme} /> : <CashFlowPage />}
+      {activePage === 'dashboard' ? <Dashboard theme={theme} />
+        : activePage === 'cash-flow' ? <CashFlowPage /> : <PreAppointmentsPage />}
     </main>
   )
 }
