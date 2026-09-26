@@ -83,7 +83,7 @@ A Edge Function privada `meta-ads-sync` usa a Graph API v26 para consultar as se
 
 O banco preserva moeda, fuso da conta, hora local da Meta e o instante equivalente em UTC. Campanhas são relacionadas aos vendedores por aliases normalizados e o dashboard calcula o CPA como investimento dividido por pedidos não cancelados no mesmo período.
 
-Custos originais ficam registrados em `spend`, enquanto `spend_usd` e `spend_brl` preservam os dois valores convertidos. A taxa USD/BRL é obtida pela API pública Frankfurter v2 com o provedor `BCB` (PTAX de fechamento), e sua data fica gravada junto ao insight. O frontend sempre usa `spend_brl`.
+Custos originais ficam registrados em `spend`, enquanto `spend_usd` e `spend_brl` preservam os dois valores convertidos. Novos gastos usam a taxa fixa de R$ 5,60 por dólar acrescida de 3,5%, resultando em R$ 5,796 por USD. A parcela já armazenada não é recalculada; quando um retrato horário aumenta, somente a diferença recebe a taxa vigente. O frontend sempre usa `spend_brl`.
 
 ### Métricas comerciais
 
@@ -127,8 +127,8 @@ contas, use o modo `historical_backfill` com a lista explícita de IDs:
 }
 ```
 
-Nesse modo, cada dia em USD usa a PTAX histórica do BCB correspondente — ou a
-última cotação disponível para finais de semana. O limite continua sendo 31 dias.
+Nesse modo, dados ainda inexistentes usam a taxa fixa vigente. Conversões já
+armazenadas são preservadas. O limite continua sendo 31 dias.
 
 Para ativar a integração, cadastre `META_ACCESS_TOKEN_1` e `META_ACCESS_TOKEN_2` nos secrets do Supabase e execute:
 

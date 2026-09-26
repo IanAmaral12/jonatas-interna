@@ -1,5 +1,12 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import {
+  convertSpend,
+  fixedExchangeRate,
+  FIXED_USD_BRL_BASE_RATE,
+  FIXED_USD_BRL_SURCHARGE,
+  preserveExistingConversion,
+} from "./exchange-rate.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -65,13 +72,12 @@ interface ExchangeRate {
   base: "USD";
   quote: "BRL";
   rate: number;
-  source: "api" | "database";
+  source: "fixed";
   rawPayload: JsonObject;
 }
 
 const GRAPH_VERSION = "v26.0";
 const GRAPH_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
-const EXCHANGE_RATE_URL = "https://api.frankfurter.dev/v2/rate/USD/BRL";
 const MESSAGING_CONVERSATION_ACTION =
   "onsite_conversion.messaging_conversation_started_7d";
 const MAX_BACKFILL_DAYS = 31;
@@ -221,65 +227,46 @@ async function loadConfiguredAccount(
   return { account, tokenSlot };
 }
 
-async function loadExchangeRate(
+function loadExchangeRate(targetDate: string): ExchangeRate {
+  return fixedExchangeRate(targetDate) as ExchangeRate;
+}
+
+async function keepStoredConversions(
   supabase: SupabaseClient,
-  targetDate?: string,
-): Promise<ExchangeRate> {
-  try {
-    const url = new URL(EXCHANGE_RATE_URL);
-    url.searchParams.set("providers", "BCB");
-    if (targetDate) url.searchParams.set("date", targetDate);
+  account: MetaAdAccount,
+  metricDate: string,
+  rows: JsonObject[],
+  exchangeRate: ExchangeRate,
+): Promise<JsonObject[]> {
+  if (rows.length === 0) return rows;
 
-    const response = await fetch(url);
-    const payload = await response.json() as JsonObject;
-    const rate = numeric(payload.rate);
-    const date = typeof payload.date === "string" ? payload.date : "";
-    if (!response.ok || rate <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      throw new Error("A resposta da cotação USD/BRL é inválida.");
-    }
-
-    const exchangeRate: ExchangeRate = {
-      date,
-      base: "USD",
-      quote: "BRL",
-      rate,
-      source: "api",
-      rawPayload: payload,
-    };
-    const { error } = await supabase.from("meta_exchange_rates").upsert({
-      rate_date: date,
-      base_currency: "USD",
-      quote_currency: "BRL",
-      rate,
-      provider: "BCB",
-      source: "Frankfurter v2",
-      fetched_at: new Date().toISOString(),
-      raw_payload: payload,
-    }, { onConflict: "rate_date" });
-    if (error) throw new Error(error.message);
-    return exchangeRate;
-  } catch (rateError) {
-    console.error(
-      "Falha ao consultar cotação; tentando último valor persistido:",
-      rateError instanceof Error ? rateError.message : rateError,
-    );
-    let fallbackQuery = supabase
-      .from("meta_exchange_rates")
-      .select("rate_date,rate,raw_payload")
-      .order("rate_date", { ascending: false });
-    if (targetDate) fallbackQuery = fallbackQuery.lte("rate_date", targetDate);
-
-    const { data, error } = await fallbackQuery.limit(1).maybeSingle();
-    if (error || !data) throw new Error("Nenhuma cotação USD/BRL está disponível.");
-    return {
-      date: data.rate_date,
-      base: "USD",
-      quote: "BRL",
-      rate: Number(data.rate),
-      source: "database",
-      rawPayload: data.raw_payload as JsonObject,
-    };
+  const storedRows: JsonObject[] = [];
+  const pageSize = 1000;
+  for (let from = 0;; from += pageSize) {
+    const { data, error } = await supabase
+      .from("meta_campaign_hourly_insights")
+      .select(
+        "campaign_id,hour_start,spend,spend_usd,spend_brl,exchange_rate_usd_brl,exchange_rate_date",
+      )
+      .eq("ad_account_id", account.id)
+      .eq("metric_date", metricDate)
+      .order("campaign_id")
+      .order("hour_start")
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(`Falha ao preservar conversões existentes: ${error.message}`);
+    storedRows.push(...(data ?? []));
+    if ((data?.length ?? 0) < pageSize) break;
   }
+
+  const storedByBucket = new Map(
+    storedRows.map((row) => [`${row.campaign_id}:${row.hour_start}`, row]),
+  );
+  return rows.map((row) => preserveExistingConversion(
+    account.currency,
+    row,
+    storedByBucket.get(`${row.campaign_id}:${row.hour_start}`),
+    exchangeRate,
+  ));
 }
 
 async function fetchAccountInsights(
@@ -320,16 +307,14 @@ async function fetchAccountInsights(
     if (!insight.campaign_id || !insight.campaign_name || !hourBucket || !hourMatch) return [];
 
     const spend = numeric(insight.spend);
+    const convertedSpend = convertSpend(account.currency, spend, exchangeRate);
     return [{
       campaign_id: insight.campaign_id,
       campaign_name: insight.campaign_name,
       hour_start: Number(hourMatch[1]),
       hour_bucket: hourBucket,
       spend,
-      spend_usd: account.currency === "USD" ? spend : spend / exchangeRate.rate,
-      spend_brl: account.currency === "BRL" ? spend : spend * exchangeRate.rate,
-      exchange_rate_usd_brl: exchangeRate.rate,
-      exchange_rate_date: exchangeRate.date,
+      ...convertedSpend,
       impressions: Math.trunc(numeric(insight.impressions)),
       reach: Math.trunc(numeric(insight.reach)),
       clicks: Math.trunc(numeric(insight.clicks)),
@@ -494,7 +479,9 @@ Deno.serve(async (request) => {
   let campaignMappings: JsonObject[] = [];
 
   try {
-    const exchangeRate = mode === "sync" ? await loadExchangeRate(supabase) : null;
+    const exchangeRate = mode === "sync"
+      ? loadExchangeRate(dateInTimezone(new Date(), "America/Sao_Paulo"))
+      : null;
     const selectedBindings = mode === "historical_backfill"
       ? ACCOUNT_BINDINGS.filter((binding) => requestedAccountIds.includes(binding.accountId))
       : ACCOUNT_BINDINGS;
@@ -542,7 +529,20 @@ Deno.serve(async (request) => {
 
       if (mode === "sync" && exchangeRate) {
         try {
-          const { metricDate, rows } = await fetchAccountInsights(discovered, exchangeRate);
+          const metricDate = dateInTimezone(new Date(), account.timezone_name);
+          const accountExchangeRate = loadExchangeRate(metricDate);
+          const fetched = await fetchAccountInsights(
+            discovered,
+            accountExchangeRate,
+            metricDate,
+          );
+          const rows = await keepStoredConversions(
+            supabase,
+            account,
+            metricDate,
+            fetched.rows,
+            accountExchangeRate,
+          );
           insightSummaries.push({
             account_id: account.account_id,
             metric_date: metricDate,
@@ -550,7 +550,7 @@ Deno.serve(async (request) => {
             currency: account.currency,
             spend: rows.reduce((total, row) => total + numeric(row.spend), 0),
             spend_brl: rows.reduce((total, row) => total + numeric(row.spend_brl), 0),
-            exchange_rate_date: exchangeRate.date,
+            exchange_rate_date: accountExchangeRate.date,
           });
           if (rows.length > 0) {
             const { data: inserted, error: replaceError } = await supabase.rpc(
@@ -579,11 +579,18 @@ Deno.serve(async (request) => {
       if (mode === "historical_backfill") {
         for (const metricDate of requestedDates) {
           try {
-            const historicalRate = await loadExchangeRate(supabase, metricDate);
-            const { rows } = await fetchAccountInsights(
+            const historicalRate = loadExchangeRate(metricDate);
+            const fetched = await fetchAccountInsights(
               discovered,
               historicalRate,
               metricDate,
+            );
+            const rows = await keepStoredConversions(
+              supabase,
+              account,
+              metricDate,
+              fetched.rows,
+              historicalRate,
             );
             insightSummaries.push({
               account_id: account.account_id,
@@ -713,7 +720,9 @@ Deno.serve(async (request) => {
           date: exchangeRate.date,
           usd_brl: exchangeRate.rate,
           source: exchangeRate.source,
-          provider: "BCB",
+          provider: "fixed",
+          base_usd_brl: FIXED_USD_BRL_BASE_RATE,
+          surcharge_percentage: FIXED_USD_BRL_SURCHARGE * 100,
         }
         : undefined,
       status,
