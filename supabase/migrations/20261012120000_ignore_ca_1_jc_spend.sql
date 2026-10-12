@@ -40,7 +40,10 @@ as $$
     where insights.bucket_start >= bounds.starts_at
       and insights.bucket_start < bounds.ends_at
       and insights.spend_brl is not null
-      and lower(btrim(accounts.name)) <> lower('CA 1 - JC')
+      -- Exclui historicamente a conta CA1 - JC e somente a campanha CURTIDA 01
+      -- da outra conta. Os dados brutos permanecem preservados para auditoria.
+      and accounts.account_id <> '1392600858079467'
+      and campaigns.id <> '52598941009722'
     group by campaigns.seller_id
   ),
   conversations_by_seller as (
@@ -191,4 +194,4 @@ revoke all on function public.get_cpa_dashboard(date, date) from public, anon, a
 grant execute on function public.get_cpa_dashboard(date, date) to authenticated;
 
 comment on function public.get_cpa_dashboard(date, date) is
-  'Retorna as métricas comerciais em BRL, desconsiderando o investimento da conta CA 1 - JC.';
+  'Retorna as métricas comerciais em BRL, desconsiderando o investimento da conta CA1 - JC e da campanha CURTIDA 01.';

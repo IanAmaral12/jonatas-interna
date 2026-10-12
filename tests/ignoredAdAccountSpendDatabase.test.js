@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 
-test('dashboard ignores spend from the CA 1 - JC ad account', async () => {
+test('dashboard ignores spend from the CA1 - JC account and CURTIDA 01 campaign', async () => {
   const db = new PGlite()
   try {
     await db.exec(`
@@ -13,10 +13,12 @@ test('dashboard ignores spend from the CA 1 - JC ad account', async () => {
       );
       create table public.meta_ad_accounts (
         id text primary key,
+        account_id text not null,
         name text not null
       );
       create table public.meta_campaigns (
         id text primary key,
+        ad_account_id text not null references public.meta_ad_accounts(id),
         seller_id uuid references public.sellers(id)
       );
       create table public.meta_campaign_hourly_insights (
@@ -39,17 +41,19 @@ test('dashboard ignores spend from the CA 1 - JC ad account', async () => {
 
       insert into public.sellers (id, name)
       values ('11111111-1111-1111-1111-111111111111', 'Ana');
-      insert into public.meta_ad_accounts (id, name) values
-        ('ignored-account', ' ca 1 - jc '),
-        ('regular-account', 'Conta principal');
-      insert into public.meta_campaigns (id, seller_id) values
-        ('ignored-campaign', null),
-        ('unmatched-campaign', null),
-        ('matched-campaign', '11111111-1111-1111-1111-111111111111');
+      insert into public.meta_ad_accounts (id, account_id, name) values
+        ('ignored-account', '1392600858079467', 'CA1 - JC'),
+        ('regular-account', '1010965721683924', 'Conta principal');
+      insert into public.meta_campaigns (id, ad_account_id, seller_id) values
+        ('ignored-account-campaign', 'ignored-account', null),
+        ('52598941009722', 'regular-account', null),
+        ('unmatched-campaign', 'regular-account', null),
+        ('matched-campaign', 'regular-account', '11111111-1111-1111-1111-111111111111');
       insert into public.meta_campaign_hourly_insights (
         ad_account_id, campaign_id, bucket_start, spend_brl
       ) values
-        ('ignored-account', 'ignored-campaign', '2026-10-12 12:00:00-03', 100),
+        ('ignored-account', 'ignored-account-campaign', '2026-10-12 12:00:00-03', 100),
+        ('regular-account', '52598941009722', '2026-10-12 12:00:00-03', 40),
         ('regular-account', 'unmatched-campaign', '2026-10-12 12:00:00-03', 30),
         ('regular-account', 'matched-campaign', '2026-10-12 12:00:00-03', 50);
     `)
