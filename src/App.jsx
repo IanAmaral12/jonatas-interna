@@ -11,6 +11,7 @@ import {
   ChartNoAxesCombined,
   Check,
   ChevronDown,
+  ChevronUp,
   CircleDollarSign,
   Eye,
   EyeOff,
@@ -47,6 +48,7 @@ import {
 } from 'chart.js'
 import { Line } from 'react-chartjs-2'
 import { supabase, supabaseConfigError } from './lib/supabase'
+import { sortCommercialRows } from './lib/commercialSort'
 import './App.css'
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Tooltip, Legend)
@@ -559,6 +561,10 @@ function Dashboard({ theme }) {
   const [error, setError] = useState('')
   const [timelineError, setTimelineError] = useState('')
   const [sellerTimelineError, setSellerTimelineError] = useState('')
+  const [commercialSort, setCommercialSort] = useState({
+    key: 'appointments',
+    direction: 'desc',
+  })
   const currency = 'BRL'
 
   useEffect(() => {
@@ -698,11 +704,11 @@ function Dashboard({ theme }) {
       return first.cpa - second.cpa
     })
     .filter((row) => row.cpa !== null)
-  const commercialRows = scopedCurrencyRows
-    .filter((row) => row.seller_id)
-    .sort((first, second) => second.appointments - first.appointments
-      || second.revenue - first.revenue
-      || first.seller_name.localeCompare(second.seller_name, 'pt-BR'))
+  const commercialRows = sortCommercialRows(
+    scopedCurrencyRows.filter((row) => row.seller_id),
+    commercialSort.key,
+    commercialSort.direction,
+  )
   const availableSellerOptions = sellerOptions.length > 0
     ? sellerOptions
     : currencyRows
@@ -1223,7 +1229,48 @@ function Dashboard({ theme }) {
         <div className="seller-performance-scroll">
           <div className="seller-performance-table">
             <div className="seller-performance-row seller-performance-head">
-              <span>Vendedor</span><span>Investimento</span><span>CPL</span><span>Conversas iniciadas</span><span>Agendamentos</span><span>Conversão</span><span>Faturamento</span><span>ROAS</span><span>Ticket médio</span>
+              {[
+                ['seller_name', 'Vendedor'],
+                ['spend', 'Investimento'],
+                ['cpl', 'CPL'],
+                ['leads', 'Conversas iniciadas'],
+                ['appointments', 'Agendamentos'],
+                ['conversion_rate', 'Conversão'],
+                ['revenue', 'Faturamento'],
+                ['roas', 'ROAS'],
+                ['average_ticket', 'Ticket médio'],
+              ].map(([key, label]) => (
+                <span
+                  className="commercial-sort-header"
+                  role="columnheader"
+                  aria-sort={commercialSort.key === key
+                    ? (commercialSort.direction === 'asc' ? 'ascending' : 'descending')
+                    : 'none'}
+                  key={key}
+                >
+                  <span>{label}</span>
+                  <span className="commercial-sort-controls">
+                    <button
+                      className={commercialSort.key === key && commercialSort.direction === 'asc' ? 'active' : ''}
+                      type="button"
+                      aria-label={`Ordenar ${label} em ordem crescente`}
+                      title={`Ordenar ${label} em ordem crescente`}
+                      onClick={() => setCommercialSort({ key, direction: 'asc' })}
+                    >
+                      <ChevronUp size={12} aria-hidden="true" />
+                    </button>
+                    <button
+                      className={commercialSort.key === key && commercialSort.direction === 'desc' ? 'active' : ''}
+                      type="button"
+                      aria-label={`Ordenar ${label} em ordem decrescente`}
+                      title={`Ordenar ${label} em ordem decrescente`}
+                      onClick={() => setCommercialSort({ key, direction: 'desc' })}
+                    >
+                      <ChevronDown size={12} aria-hidden="true" />
+                    </button>
+                  </span>
+                </span>
+              ))}
             </div>
             {loading ? <div className="seller-performance-loading"><LoaderCircle className="spin" size={22} />Atualizando indicadores...</div>
               : commercialRows.length > 0 ? commercialRows.map((row, index) => (

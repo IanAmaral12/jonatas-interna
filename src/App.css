@@ -170,6 +170,13 @@ form { display: grid; gap: 18px; }
 .seller-performance-table { min-width: 1220px; display: grid; gap: 7px; }
 .seller-performance-row { min-height: 67px; display: grid; grid-template-columns: minmax(190px, 1.45fr) repeat(8, minmax(105px, 1fr)); align-items: center; gap: 13px; padding: 10px 13px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-subtle); }
 .seller-performance-head { min-height: 38px; color: var(--muted); border: 0; background: transparent; font-size: 10px; font-weight: 800; letter-spacing: .65px; text-transform: uppercase; }
+.commercial-sort-header { min-width: 0; display: flex; align-items: center; gap: 4px; }
+.commercial-sort-header > span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.commercial-sort-controls { display: grid; flex: 0 0 auto; gap: 1px; }
+.commercial-sort-controls button { width: 17px; height: 14px; display: grid; place-items: center; padding: 0; color: var(--muted); border: 0; border-radius: 4px; background: transparent; cursor: pointer; transition: color .15s, background .15s; }
+.commercial-sort-controls button:hover, .commercial-sort-controls button:focus-visible { color: var(--orange-dark); background: var(--orange-soft); }
+.commercial-sort-controls button:focus-visible { outline: 2px solid rgba(255,122,26,.32); outline-offset: 1px; }
+.commercial-sort-controls button.active { color: #211005; background: var(--orange); }
 .seller-cell { min-width: 0; display: flex; align-items: center; gap: 10px; }
 .seller-cell > span { width: 27px; height: 27px; display: grid; flex: 0 0 auto; place-items: center; color: var(--orange-dark); border-radius: 8px; background: var(--orange-soft); font-size: 10px; font-weight: 850; }
 .seller-cell strong { overflow: hidden; color: var(--ink); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
