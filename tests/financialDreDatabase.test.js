@@ -60,6 +60,9 @@ test('monthly DRE reconciles costs, payments, settings, and access', async (t) =
     const name = filenames.find((file) => file.endsWith('_create_financial_dre.sql'))
     assert.ok(name, 'financial DRE migration exists')
     await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'))
+    const refinement = filenames.find((file) => file.endsWith('_refine_financial_dre_cost_components.sql'))
+    assert.ok(refinement, 'financial DRE refinement exists')
+    await db.exec(await readFile(new URL(`../supabase/migrations/${refinement}`, import.meta.url), 'utf8'))
 
     const asRole = async (role, action) => {
       await db.exec(`set role ${role}`)
@@ -138,9 +141,14 @@ test('monthly DRE reconciles costs, payments, settings, and access', async (t) =
       assert.equal(carla.total_cost, null)
 
       await insertSetting(sellerC, '2026-10-01', 500, null)
-      carla = (await rowsFor('2026-10-01')).find((row) => row.seller_id === sellerC)
+      const incompleteRows = await rowsFor('2026-10-01')
+      carla = incompleteRows.find((row) => row.seller_id === sellerC)
       assert.equal(carla.configuration_pending, true)
       assert.equal(carla.commission_cost, null)
+      const general = incompleteRows.find((row) => row.row_type === 'general')
+      assert.equal(general.salary_cost, '1700.00')
+      assert.equal(general.commission_cost, null)
+      assert.equal(general.total_cost, null)
 
       await asRole('authenticated', () => db.query(`update public.seller_financial_settings
         set commission_pct=0 where seller_id=$1 and effective_month='2026-10-01'`, [sellerC]))

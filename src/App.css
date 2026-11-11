@@ -481,7 +481,7 @@ form { display: grid; gap: 18px; }
 .dre-month-label, .dre-settings label { display: grid; gap: 7px; color: var(--muted); font-size: 12px; font-weight: 700; }
 .dre-month-label input, .dre-settings input, .dre-settings select { min-height: 44px; padding: 9px 12px; color: var(--ink); border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); }
 .dre-month-label input { min-width: 190px; }
-.dre-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
+.dre-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px; margin-bottom: 22px; }
 .dre-summary article, .dre-settings, .dre-seller-card, .dre-page > .dre-cost-details { min-width: 0; padding: 21px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); }
 .dre-summary article { display: grid; gap: 12px; }
 .dre-summary span { color: var(--muted); font-size: 12px; font-weight: 700; }

@@ -71,6 +71,7 @@ function CostDetails({ row }) {
       <div><dt>Frete ({row.order_count} pedidos)</dt><dd>{formatMoney(row.shipping_cost)}</dd></div>
       <div><dt>Tráfego</dt><dd>{formatMoney(row.traffic_cost)}</dd></div>
       <div className="dre-cost-total"><dt>Custo total</dt><dd>{formatMoney(row.total_cost)}</dd></div>
+      <div><dt>Saldo confirmado</dt><dd>{formatMoney(row.confirmed_balance)}</dd></div>
     </dl>
   </details>
 }
@@ -191,6 +192,7 @@ export default function FinancialDrePage() {
         <article><span>Faturamento agendado</span><strong>{formatMoney(general?.scheduled_revenue)}</strong></article>
         <article><span>Vendas pagas</span><strong>{formatMoney(general?.confirmed_revenue)}</strong></article>
         <article><span>Custo total</span><strong>{formatMoney(general?.total_cost)}</strong></article>
+        <article><span>Saldo confirmado</span><strong>{formatMoney(general?.confirmed_balance)}</strong></article>
         <article><span>Falta para se pagar</span><strong>{formatMoney(general?.remaining_to_break_even)}</strong></article>
       </section>
       {(general?.configuration_pending || general?.units_pending) &&
