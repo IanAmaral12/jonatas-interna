@@ -23,7 +23,6 @@ interface OrderRecord {
   observacao: string | null;
   tratamento: string | null;
   documento: string | null;
-  plataforma: string | null;
   data_pagamento: string | null;
   codigo_rastreio: string | null;
   status_rastreio: string | null;
@@ -143,7 +142,6 @@ function mapOrder(payload: JsonObject): { event: string | null; order: OrderReco
       observacao: cleanString(getPath(payload, ["skaletracking", "observacao"])),
       tratamento: cleanString(getPath(payload, ["product", "name"])),
       documento: cleanString(getPath(payload, ["customer", "doc"])),
-      plataforma: cleanString(getPath(payload, ["skaletracking", "plataforma"])),
       data_pagamento:
         dateOnly(getPath(payload, ["transaction", "paid_at_data"])) ||
         dateOnly(getPath(payload, ["transaction", "paid_at"])),
