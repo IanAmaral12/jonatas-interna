@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { calculateBreakEvenBars } from '../lib/financialDreBars'
+import { parseFinancialDecimal } from '../lib/financialDreSettings'
 
 const currency = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' })
 const monthFormatter = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric', timeZone: 'UTC' })
@@ -18,21 +19,15 @@ function formatMoney(value) {
   return value == null ? '—' : currency.format(Number(value))
 }
 
-function parseDecimal(value, maximum) {
-  const trimmed = value.trim()
-  if (!/^\d+(?:[,.]\d{1,2})?$/.test(trimmed)) return null
-  const number = Number(trimmed.replace(',', '.'))
-  return Number.isFinite(number) && number >= 0 && number <= maximum ? number : null
-}
-
 function FinancialBars({ row }) {
   const totalCost = row.total_cost == null ? null : Number(row.total_cost)
   const paid = Number(row.confirmed_revenue)
   const bars = calculateBreakEvenBars(totalCost, paid)
 
   if (bars.costPercent === null) {
+    const missing = [row.salary_cost == null && 'salário', row.commission_pct == null && 'comissão'].filter(Boolean)
     return <p className="dre-pending" role="status">
-      {row.units_pending ? 'Quantidade de produtos pendente.' : 'Salário ou comissão pendente.'}
+      {row.units_pending ? 'Quantidade de produtos pendente.' : `Pendente: ${missing.join(' e ')}.`}
     </p>
   }
 
@@ -99,7 +94,6 @@ export default function FinancialDrePage() {
   useEffect(() => {
     let active = true
     const load = async () => {
-      setLoading(true)
       setError('')
       const [dre, settingsResult, sellersResult] = await Promise.all([
         supabase.rpc('get_financial_dre', { p_month: monthDate }),
@@ -133,6 +127,7 @@ export default function FinancialDrePage() {
 
   const sellerId = sellerOptions.some((seller) => seller.id === selectedSellerId)
     ? selectedSellerId : sellerOptions[0]?.id || ''
+  const selectedRow = rows.find((row) => row.seller_id === sellerId)
 
   const selectedSetting = settings.find((setting) =>
     setting.seller_id === sellerId && setting.effective_month === monthDate)
@@ -142,27 +137,49 @@ export default function FinancialDrePage() {
   const salaryInput = draft.key === draftKey ? draft.salary
     : selectedSetting?.monthly_salary == null ? '' : String(selectedSetting.monthly_salary)
   const commissionInput = draft.key === draftKey ? draft.commission
-    : selectedSetting?.commission_pct == null ? '' : String(selectedSetting.commission_pct)
+    : currentRate?.commission_pct == null ? '' : String(currentRate.commission_pct)
 
-  async function saveSetting(event, field, value, maximum) {
+  async function saveSettings(event) {
     event.preventDefault()
-    const amount = parseDecimal(value, maximum)
-    if (!sellerId || amount === null) {
-      setNotice(field === 'monthly_salary'
-        ? 'Informe um salário válido com até duas casas decimais.'
-        : 'Informe uma comissão de 0% a 100% com até duas casas decimais.')
+    const salary = salaryInput.trim() ? parseFinancialDecimal(salaryInput, 999999999999.99) : null
+    const commission = commissionInput.trim() ? parseFinancialDecimal(commissionInput, 100) : null
+    if (!sellerId || (salaryInput.trim() && salary === null) ||
+      (commissionInput.trim() && commission === null)) {
+      setNotice('Confira o salário e a comissão. Use valores positivos com até duas casas decimais; comissão até 100%.')
+      return
+    }
+    const changes = {}
+    if (salary !== null && (selectedSetting?.monthly_salary == null || salary !== Number(selectedSetting.monthly_salary))) changes.monthly_salary = salary
+    if (commission !== null && commission !== Number(currentRate?.commission_pct)) changes.commission_pct = commission
+    if (!Object.keys(changes).length) {
+      setNotice(selectedSetting?.monthly_salary == null
+        ? 'Informe o salário deste mês ou altere a comissão para salvar.'
+        : 'Nenhuma alteração para salvar.')
       return
     }
     setSaving(true)
     setNotice('')
     const target = supabase.from('seller_financial_settings')
     const result = selectedSetting
-      ? await target.update({ [field]: amount }).eq('seller_id', sellerId).eq('effective_month', monthDate)
-      : await target.insert({ seller_id: sellerId, effective_month: monthDate, [field]: amount })
+      ? await target.update(changes).eq('seller_id', sellerId).eq('effective_month', monthDate)
+      : await target.insert({ seller_id: sellerId, effective_month: monthDate, ...changes })
     if (result.error) {
       setNotice('Não foi possível salvar. Recarregue a página e tente novamente.')
     } else {
-      setNotice(field === 'monthly_salary' ? 'Salário salvo para este mês.' : 'Comissão salva a partir deste mês.')
+      setSettings((previous) => [{
+        seller_id: sellerId, effective_month: monthDate,
+        monthly_salary: selectedSetting?.monthly_salary ?? null,
+        commission_pct: selectedSetting?.commission_pct ?? null,
+        ...changes,
+      }, ...previous.filter((setting) =>
+        setting.seller_id !== sellerId || setting.effective_month !== monthDate)])
+      const missing = [
+        changes.monthly_salary == null && selectedSetting?.monthly_salary == null && 'salário deste mês',
+        changes.commission_pct == null && currentRate?.commission_pct == null && 'comissão',
+      ].filter(Boolean)
+      setNotice(missing.length
+        ? `Valores salvos. Falta cadastrar ${missing.join(' e ')} para completar o DRE.`
+        : 'Configuração salva. O DRE foi atualizado.')
       setDraft({ key: '', salary: '', commission: '' })
       setRevision((value) => value + 1)
     }
@@ -182,11 +199,48 @@ export default function FinancialDrePage() {
       </div>
       <label className="dre-month-label" htmlFor="dre-month">Mês de referência
         <input id="dre-month" type="month" value={month}
-          onChange={(event) => { if (event.target.value) setMonth(event.target.value) }} />
+          onChange={(event) => { if (event.target.value) { setMonth(event.target.value); setLoading(true); setNotice('') } }} />
       </label>
     </header>
 
     {error && <p className="dre-error" role="alert">{error}</p>}
+    {!loading && !error && <section className="dre-settings" aria-labelledby="dre-settings-title">
+      <div className="dre-settings-heading">
+        <div>
+          <h2 id="dre-settings-title">Configurar vendedor</h2>
+          <p>Salário vale só para {monthLabel}. A comissão continua nos próximos meses até você alterar.</p>
+        </div>
+        {selectedRow?.configuration_pending && <span className="dre-settings-badge">Configuração pendente</span>}
+      </div>
+      {notice && <p role="status" className="dre-notice">{notice}</p>}
+      <form className="dre-settings-form" onSubmit={saveSettings}>
+        <label htmlFor="dre-seller">Vendedor
+          <select id="dre-seller" value={sellerId} disabled={saving}
+            onChange={(event) => { setSelectedSellerId(event.target.value); setNotice('') }}>
+            {sellerOptions.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}
+          </select>
+        </label>
+        {sellerId && <>
+          <div className="dre-settings-fields">
+            <label htmlFor="dre-salary">Salário de {monthLabel} (R$)
+              <input id="dre-salary" inputMode="decimal" value={salaryInput}
+                onChange={(event) => setDraft({ key: draftKey, salary: event.target.value, commission: commissionInput })}
+                placeholder="Ex.: 1.000,00" />
+              <small>{selectedSetting?.monthly_salary == null ? 'Ainda não lançado neste mês.' : 'Lançado para este mês.'} Não se repete automaticamente.</small>
+            </label>
+            <label htmlFor="dre-commission">Comissão sobre vendas agendadas (%)
+              <input id="dre-commission" inputMode="decimal" value={commissionInput}
+                onChange={(event) => setDraft({ key: draftKey, salary: salaryInput, commission: event.target.value })}
+                placeholder="Ex.: 8,00" />
+              <small>{currentRate
+                ? `Vigente: ${Number(currentRate.commission_pct).toLocaleString('pt-BR')}% desde ${currentRate.effective_month.slice(0, 7)}. Alterações valem a partir de ${monthLabel}.`
+                : `Sem comissão vigente. A taxa cadastrada valerá a partir de ${monthLabel}.`}</small>
+            </label>
+          </div>
+          <button type="submit" disabled={saving}>{saving ? 'Salvando…' : 'Salvar configuração'}</button>
+        </>}
+      </form>
+    </section>}
     {loading ? <p role="status">Carregando dados financeiros…</p> : !error && <>
       <section className="dre-summary" aria-label={`Resumo de ${monthLabel}`}>
         <article><span>Faturamento agendado</span><strong>{formatMoney(general?.scheduled_revenue)}</strong></article>
@@ -205,6 +259,10 @@ export default function FinancialDrePage() {
         {sellerRows.map((row) => <article className="dre-seller-card" key={row.seller_id}>
           <div className="dre-seller-heading"><h3>{row.seller_name}</h3><span>{formatMoney(row.scheduled_revenue)} agendados</span></div>
           <FinancialBars row={row} />
+          {row.configuration_pending && <button className="dre-configure-link" type="button" onClick={() => {
+            setSelectedSellerId(row.seller_id)
+            document.getElementById(row.salary_cost == null ? 'dre-salary' : 'dre-commission')?.focus()
+          }}>Configurar {row.seller_name}</button>}
           <CostDetails row={row} />
         </article>)}
         {unassigned && <article className="dre-seller-card" aria-label="Valores não atribuídos">
@@ -214,30 +272,5 @@ export default function FinancialDrePage() {
       </section>
     </>}
 
-    {!loading && !error && <section className="dre-settings" aria-labelledby="dre-settings-title">
-      <h2 id="dre-settings-title">Salário e comissão</h2>
-      <p>Salário vale somente para {monthLabel}. Comissão continua vigente até uma nova alteração.</p>
-      {notice && <p role="status" className="dre-notice">{notice}</p>}
-      <label htmlFor="dre-seller">Vendedor
-        <select id="dre-seller" value={sellerId} onChange={(event) => setSelectedSellerId(event.target.value)}>
-          {sellerOptions.map((seller) => <option key={seller.id} value={seller.id}>{seller.name}</option>)}
-        </select>
-      </label>
-      {sellerId && <div className="dre-settings-forms">
-        <form onSubmit={(event) => saveSetting(event, 'monthly_salary', salaryInput, 999999999999.99)}>
-          <label htmlFor="dre-salary">Salário de {monthLabel}</label>
-          <input id="dre-salary" inputMode="decimal" value={salaryInput}
-            onChange={(event) => setDraft({ key: draftKey, salary: event.target.value, commission: commissionInput })} placeholder="1000,00" />
-          <button type="submit" disabled={saving}>Salvar salário</button>
-        </form>
-        <form onSubmit={(event) => saveSetting(event, 'commission_pct', commissionInput, 100)}>
-          <label htmlFor="dre-commission">Comissão a partir de {monthLabel} (%)</label>
-          <input id="dre-commission" inputMode="decimal" value={commissionInput}
-            onChange={(event) => setDraft({ key: draftKey, salary: salaryInput, commission: event.target.value })} placeholder="8,00" />
-          {currentRate && <small>Vigente: {Number(currentRate.commission_pct).toLocaleString('pt-BR')}% desde {currentRate.effective_month.slice(0, 7)}</small>}
-          <button type="submit" disabled={saving}>Salvar comissão</button>
-        </form>
-      </div>}
-    </section>}
   </section>
 }

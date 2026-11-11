@@ -514,14 +514,21 @@ form { display: grid; gap: 18px; }
 .dre-cost-details dd { margin: 0; font-weight: 700; text-align: right; }
 .dre-cost-details .dre-cost-total { padding-top: 9px; border-top: 1px solid var(--border); }
 .dre-pending, .dre-error { padding: 13px 15px; border: 1px solid var(--error-border); border-radius: 10px; color: var(--error-text); background: var(--error-bg); font-size: 13px; }
-.dre-settings { margin-top: 26px; }
-.dre-settings > label { max-width: 380px; margin-top: 17px; }
-.dre-settings-forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; margin-top: 17px; }
-.dre-settings form { display: grid; align-content: start; gap: 9px; padding: 17px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-subtle); }
-.dre-settings form > label { color: var(--ink); }
-.dre-settings form small { color: var(--muted); }
-.dre-settings button { min-height: 42px; margin-top: 4px; padding: 8px 14px; border: 0; border-radius: 9px; color: #fff; background: var(--orange-dark); font-weight: 700; }
-.dre-settings button:focus-visible, .dre-settings input:focus-visible, .dre-settings select:focus-visible, .dre-month-label input:focus-visible, .dre-cost-details summary:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+.dre-settings { margin-bottom: 22px; }
+.dre-settings-heading { display: flex; justify-content: space-between; align-items: start; gap: 15px; }
+.dre-settings-heading h2 { margin-bottom: 7px; }
+.dre-settings-heading p { margin: 0; color: var(--muted); font-size: 13px; }
+.dre-settings-badge { padding: 6px 10px; border-radius: 999px; color: var(--error-text); background: var(--error-bg); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.dre-settings-form { display: grid; gap: 15px; margin-top: 19px; }
+.dre-settings-form > label { max-width: 380px; }
+.dre-settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 15px; }
+.dre-settings-fields label { align-content: start; }
+.dre-settings-fields small { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.4; }
+.dre-settings-form button { justify-self: start; min-height: 42px; padding: 8px 20px; border: 0; border-radius: 9px; color: #fff; background: var(--orange-dark); font-weight: 700; }
+.dre-settings-form button:disabled { opacity: .6; cursor: wait; }
+.dre-configure-link { margin-top: 10px; padding: 3px 0; border: 0; color: var(--orange-dark); background: none; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.dre-configure-link:hover { text-decoration: underline; }
+.dre-settings button:focus-visible, .dre-configure-link:focus-visible, .dre-settings input:focus-visible, .dre-settings select:focus-visible, .dre-month-label input:focus-visible, .dre-cost-details summary:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
 .dre-notice { padding: 10px 12px; border-radius: 9px; background: var(--orange-soft); }
 
 @media (max-width: 1000px) {
@@ -531,7 +538,9 @@ form { display: grid; gap: 18px; }
 @media (max-width: 650px) {
   .dre-header { align-items: stretch; flex-direction: column; }
   .dre-month-label input { width: 100%; }
-  .dre-settings-forms { grid-template-columns: 1fr; }
+  .dre-settings-fields { grid-template-columns: 1fr; }
+  .dre-settings-heading { flex-direction: column; }
+  .dre-settings-form button { width: 100%; }
 }
 
 @media (max-width: 430px) {
