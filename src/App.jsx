@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import PreAppointmentsPage from './components/PreAppointmentsPage'
-import FinancialDrePage from './components/FinancialDrePage'
+import FinancialWorkspace from './components/FinancialWorkspace'
 import { includePreAppointments } from './lib/preAppointments'
 import {
   AlertTriangle,
@@ -1737,15 +1737,14 @@ function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
             <LayoutDashboard size={19} />
             <span>Dashboard</span>
           </button>
-          <button
-            className={`sidebar-nav-item${activePage === 'financial-dre' ? ' active' : ''}`}
-            type="button"
-            aria-current={activePage === 'financial-dre' ? 'page' : undefined}
-            onClick={() => setActivePage('financial-dre')}
-          >
-            <ReceiptText size={19} />
-            <span>DRE financeiro</span>
-          </button>
+          {[
+            ['costs', 'Custos'], ['ranking', 'Ranking de vendedores'], ['dashboard', 'Dashboard financeiro'],
+          ].map(([view, label]) => <button
+            className={`sidebar-nav-item${activePage === `financial-${view}` ? ' active' : ''}`}
+            type="button" key={view}
+            aria-current={activePage === `financial-${view}` ? 'page' : undefined}
+            onClick={() => setActivePage(`financial-${view}`)}
+          ><ReceiptText size={19} /><span>{label}</span></button>)}
           <button
             className={`sidebar-nav-item${activePage === 'cash-flow' ? ' active' : ''}`}
             type="button"
@@ -1779,7 +1778,7 @@ function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
       </aside>
 
       {activePage === 'dashboard' ? <Dashboard theme={theme} />
-        : activePage === 'financial-dre' ? <FinancialDrePage />
+        : activePage.startsWith('financial-') ? <FinancialWorkspace view={activePage.slice('financial-'.length)} onViewChange={(view) => setActivePage(`financial-${view}`)} />
           : activePage === 'cash-flow' ? <CashFlowPage /> : <PreAppointmentsPage />}
     </main>
   )
