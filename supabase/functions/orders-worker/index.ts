@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
+import { sumProductUnits } from "./order-units.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -18,6 +19,7 @@ interface OrderRecord {
   nome_cliente: string | null;
   contato_cliente: string | null;
   valor: number | null;
+  product_units: number | null;
   observacao: string | null;
   tratamento: string | null;
   documento: string | null;
@@ -137,6 +139,7 @@ function mapOrder(payload: JsonObject): { event: string | null; order: OrderReco
       nome_cliente: cleanString(getPath(payload, ["customer", "name"])),
       contato_cliente: phone || email,
       valor: centsToMoney(getPath(payload, ["product", "price"])),
+      product_units: sumProductUnits(getPath(payload, ["product", "products"])),
       observacao: cleanString(getPath(payload, ["skaletracking", "observacao"])),
       tratamento: cleanString(getPath(payload, ["product", "name"])),
       documento: cleanString(getPath(payload, ["customer", "doc"])),
@@ -157,7 +160,7 @@ function mapOrder(payload: JsonObject): { event: string | null; order: OrderReco
 function compactUpdate(order: OrderRecord): Partial<OrderRecord> {
   return Object.fromEntries(
     Object.entries(order).filter(([key, value]) =>
-      key !== "id" && key !== "data" && value !== null
+      key !== "id" && key !== "data" && key !== "product_units" && value !== null
     ),
   ) as Partial<OrderRecord>;
 }
