@@ -72,9 +72,9 @@ Contrato de resposta:
 - `summary`: mesmos campos financeiros das linhas, acrescidos de `general_expenses`, `unallocated_tax` e `tax_recorded`.
 - `rows`: vendedor ou não atribuído; cada linha contém `row_type`, `seller_id`, `seller_name`, `order_count`, `product_units`, `scheduled_revenue`, `commission_base_revenue`, `known_received_revenue`, `confirmed_revenue`, `salary_cost`, `commission_pct`, `commission_cost`, `production_cost`, `shipping_cost`, `traffic_cost`, `skale_cost`, `payment_fee_cost`, `external_commission_cost`, `allocated_tax`, `known_cost`, `total_cost`, `confirmed_profit`, `margin_pct`, `remaining_to_break_even`, `surplus` e `pending`.
 - `pending`: objeto de contagens para `salary`, `commission`, `units`, `payment_fee`, `received_amount` e `external_commission`. Zero significa sem pendência.
-- `seller_settings`: lista de vendedores ativos ou presentes no mês, com salário daquele mês, percentual vigente, mês da vigência e percentual cadastrado exatamente no mês (nullable), para preservar mudanças históricas no formulário.
-- `expenses`: registros gerais do mês, com id, descrição, valor e data.
-- `tax`: registro do mês ou null. `rates`: fabricação 6.90, frete 30.00, Skale 0.50.
+- `seller_settings`: lista de vendedores ativos ou presentes no mês, com `seller_id`, `seller_name`, `monthly_salary`, `commission_pct`, `commission_effective_month` e `month_commission_pct` (percentual exatamente no mês, nullable), para preservar mudanças históricas no formulário.
+- `expenses`: registros gerais do mês, com `id`, `description`, `amount` e `cost_date`.
+- `tax`: `{month_start, tax_paid}` ou null. `rates`: `{production: 6.90, shipping: 30.00, skale: 0.50}`.
 
 Todos os valores monetários são BRL; nunca enviar o corpo completo dos pedidos para essas telas. As tabelas de remuneração/impostos/despesas usam RLS e grants somente para autenticados. Retratos por pedido e sua função de gravação são restritos ao service_role. A RPC agrega as tabelas privadas, fixa search_path e revoga acesso de public/anon.
 

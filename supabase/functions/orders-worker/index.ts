@@ -356,6 +356,14 @@ Deno.serve(async (request) => {
         result.updated += 1;
       }
 
+      const { error: snapshotError } = await supabase.rpc("record_order_financial_snapshot", {
+        p_order_id: order.id,
+        p_payload: payload,
+        p_message_id: queueMessage.msg_id,
+        p_received_at: cleanString(envelope?.received_at) || queueMessage.enqueued_at,
+      });
+      if (snapshotError) throw new Error(`Falha ao registrar financeiro: ${snapshotError.message}`);
+
       await archiveMessage(supabase, queueMessage.msg_id);
     } catch (processingError) {
       const reason = processingError instanceof Error
