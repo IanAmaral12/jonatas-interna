@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import PreAppointmentsPage from './components/PreAppointmentsPage'
+import FinancialDrePage from './components/FinancialDrePage'
 import { includePreAppointments } from './lib/preAppointments'
 import {
   AlertTriangle,
@@ -1737,6 +1738,15 @@ function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
             <span>Dashboard</span>
           </button>
           <button
+            className={`sidebar-nav-item${activePage === 'financial-dre' ? ' active' : ''}`}
+            type="button"
+            aria-current={activePage === 'financial-dre' ? 'page' : undefined}
+            onClick={() => setActivePage('financial-dre')}
+          >
+            <ReceiptText size={19} />
+            <span>DRE financeiro</span>
+          </button>
+          <button
             className={`sidebar-nav-item${activePage === 'cash-flow' ? ' active' : ''}`}
             type="button"
             aria-current={activePage === 'cash-flow' ? 'page' : undefined}
@@ -1769,7 +1779,8 @@ function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
       </aside>
 
       {activePage === 'dashboard' ? <Dashboard theme={theme} />
-        : activePage === 'cash-flow' ? <CashFlowPage /> : <PreAppointmentsPage />}
+        : activePage === 'financial-dre' ? <FinancialDrePage />
+          : activePage === 'cash-flow' ? <CashFlowPage /> : <PreAppointmentsPage />}
     </main>
   )
 }
