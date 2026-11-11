@@ -120,6 +120,18 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
       assert.equal(Number(row.external_commission_cost),15)
       assert.equal(row.pending.payment_fee,0)
     })
+    await check('older commercial cancellation cannot remove costs from a newer paid and delivered snapshot',async()=>{
+      await write('a-3',{updated_at:'2026-11-06T12:00:00Z',skaletracking:{status_entrega:'Entregue'},
+        transaction:{payment_status:'Pago',paid_amount:10000,acquirer_cost:0,affiliate_earned:0}},20)
+      await write('a-3',{updated_at:'2026-11-04T12:00:00Z',skaletracking:{status_entrega:'Cancelado'},
+        transaction:{payment_status:'Cancelado'}},21)
+      await db.exec("update public.orders set cancelado=true,status_rastreio='Cancelado',status_pagamento='Cancelado' where id='a-3'")
+      const row=(await workspace()).rows[0]
+      assert.equal(row.production_cost,69)
+      assert.equal(row.shipping_cost,300)
+      assert.equal(row.commission_base_revenue,10000)
+      assert.equal(row.confirmed_revenue,3100)
+    })
     await check('salary is exact-month, commission persists historically and inactive salary-only seller appears',async()=>{
       await db.exec(`insert into public.seller_financial_settings values ('${ana}','2026-11-01',1100,null),('${ana}','2026-12-01',null,10),('${bruno}','2026-10-01',200,null);
         insert into public.orders values ('november','${ana}','2026-11-01 03:30+00',100,'After Pay',null,false,1);`)

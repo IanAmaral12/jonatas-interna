@@ -31,6 +31,7 @@ begin
   ), states as (
     select orders.*,
       private.financial_payment_status(coalesce(snapshot.payment_status,orders.status_pagamento)) payment,
+      snapshot.payment_status is not null has_versioned_payment,
       lower(btrim(coalesce(snapshot.shipping_status,orders.status_rastreio))) shipping,
       snapshot.received_amount, snapshot.received_payment_status,
       snapshot.payment_fee, snapshot.external_commission,
@@ -39,7 +40,9 @@ begin
     left join public.order_financial_snapshots snapshot on snapshot.order_id=orders.id
     where orders.data >= bounds.starts_at and orders.data < bounds.ends_at
   ), classified as (
-    select states.*, coalesce(cancelado,false) or coalesce(shipping='cancelado',false) cancelled,
+    select states.*,
+      coalesce(case when has_versioned_payment then payment='cancelado' else cancelado end,false)
+        or coalesce(shipping='cancelado',false) cancelled,
       coalesce(payment in ('paid','partial'),false) recognized,
       case when payment=received_payment_status then received_amount end actual_received
     from states

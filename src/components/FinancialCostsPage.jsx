@@ -57,7 +57,14 @@ export default function FinancialCostsPage({ data, month, sellerId, onSelectSell
       ? supabase.from('seller_financial_settings').update(changes).eq('seller_id', sellerId).eq('effective_month', monthDate)
       : supabase.from('seller_financial_settings').insert({ seller_id: sellerId, effective_month: monthDate, ...changes }),
     `Remuneração de ${setting.seller_name} salva para ${label}.`)
-    if (saved) setSavedSellerKeys((previous) => new Set(previous).add(key))
+    if (saved) {
+      setSavedSellerKeys((previous) => new Set(previous).add(key))
+      setDrafts((previous) => {
+        const next = { ...previous }
+        delete next[key]
+        return next
+      })
+    }
   }
 
   async function saveTax(event) {

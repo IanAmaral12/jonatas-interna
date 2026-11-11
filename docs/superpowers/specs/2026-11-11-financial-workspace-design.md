@@ -25,7 +25,7 @@ A comparação com código e banco de referência está em `2026-11-11-financial
 - Comissão interna: percentual vigente multiplicado pelo agendado não cancelado; arredondar em centavos. Não confundir com comissão externa do payload.
 - Fabricação: R$ 6,90 por unidade de pedido não cancelado e não devolvido. Devolvido recupera fabricação; Em Devolução mantém o custo. Quantidade ausente em pedido elegível gera pendência.
 - Frete: R$ 30 por pedido não cancelado, inclusive devolvido e ainda não pago.
-- Cancelado no financeiro: `orders.cancelado = true` ou rastreio exatamente Cancelado, ignorando caixa e espaços. Estados Taxa de Cancelamento e Taxa de Cancelamento Pago não são cancelamento por substring. Essa classificação não altera as métricas comerciais existentes.
+- Cancelado no financeiro: estado de pagamento versionado Cancelado ou rastreio versionado exatamente Cancelado, ignorando caixa e espaços. Usar `orders.cancelado` somente sem estado de pagamento financeiro; usar rastreio comercial somente sem rastreio financeiro. O flag comercial é derivado de notificações sem proteção temporal e não pode contrariar um estado financeiro mais novo. Estados Taxa de Cancelamento e Taxa de Cancelamento Pago não são cancelamento por substring. Essa classificação não altera as métricas comerciais existentes.
 - Tráfego: investimento BRL do vendedor no mesmo mês, mantendo as exclusões da conta 1392600858079467 e campanha 52598941009722.
 - Skale: R$ 0,50 por pedido criado, inclusive cancelado, uma vez por pedido.
 - Adquirência: `transaction.acquirer_cost / 100`, válido e não negativo. Ausência ou JSON null não significam zero. Não usar `total_price - producer_earned - affiliate_earned` no Interna porque esses ganhos normalmente vêm zerados. A taxa conhecida permanece como custo após chargeback, até uma atualização explícita; não inventar devolução da taxa.
@@ -60,7 +60,7 @@ Atualizações mais novas substituem valores presentes; campos ausentes não apa
 
 Backfill a partir de `pgmq.a_orders_ingest`, unido aos pedidos existentes e sem consumir/reprocessar a fila. Usar o último valor financeiro válido e preservar os eventos de origem. Exclusão de mensagens de teste deve seguir o worker. A data de agendamento e as unidades existentes não são regravadas.
 
-Após publicar o novo worker, reconciliar a cauda do arquivo desde o marco capturado antes da migração. Isso preenche mensagens que a versão antiga arquivar entre a carga inicial e o deploy, sem duplicar custos ou receitas.
+Após publicar o novo worker e confirmar que uma execução anterior terminou pelo lease, executar reconciliação integral idempotente do arquivo. Não limitar esse passo ao maior msg_id anterior: uma mensagem antiga em retry pode ser arquivada durante o deploy com ID menor que esse marco. Conferir a cobertura depois da reconciliação, sem duplicar custos ou receitas.
 
 ## Consulta compartilhada
 
