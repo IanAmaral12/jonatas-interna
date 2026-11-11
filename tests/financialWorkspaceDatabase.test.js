@@ -19,7 +19,7 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
       create table public.meta_campaigns(id text primary key,ad_account_id text,seller_id uuid);
       create table public.meta_campaign_hourly_insights(campaign_id text,ad_account_id text,bucket_start timestamptz,spend_brl numeric);`)
     const files = await readdir(new URL('../supabase/migrations/', import.meta.url))
-    for (const suffix of ['_create_financial_dre.sql', '_order_financial_snapshots.sql', '_financial_workspace.sql']) {
+    for (const suffix of ['_create_financial_dre.sql', '_order_financial_snapshots.sql', '_financial_workspace.sql', '_financial_workspace_money_precision.sql']) {
       const name = files.find(f => f.endsWith(suffix))
       assert.ok(name, `${suffix} migration exists`)
       await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'))
@@ -88,6 +88,15 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
       assert.equal(row.confirmed_revenue,null)
       assert.equal(row.confirmed_profit,null)
       assert.equal(row.remaining_to_break_even,null)
+    })
+    await check('traffic conversion precision closes each seller and the consolidated total in cents',async()=>{
+      await db.exec("update public.meta_campaign_hourly_insights set spend_brl=500.005 where campaign_id='seller'")
+      const result=await workspace(); const row=result.rows[0]
+      assert.equal(row.traffic_cost,500.01)
+      assert.equal(row.total_cost,2734.01)
+      assert.equal(row.confirmed_profit,265.99)
+      assert.equal(result.summary.total_cost,2774.01)
+      assert.equal(result.summary.confirmed_profit,225.99)
     })
     await check('refund with prior payment but missing fee remains pending',async()=>{
       await write('a-3',{transaction:{payment_status:'Pago',paid_amount:10000,affiliate_earned:0}})
