@@ -2,21 +2,21 @@ import { calculateBreakEvenBars } from '../lib/financialDreBars'
 import { costFields, costLabel, formatMoney, formatPercent } from '../lib/financialWorkspace'
 
 const pendingLabels = {
-  salary: 'salário do mês não lançado', commission: 'comissão interna não configurada',
-  units: 'pedido sem quantidade de produtos', payment_fee: 'pedido sem taxa de adquirência',
-  received_amount: 'pagamento sem valor recebido recuperável', external_commission: 'pedido sem comissão externa informada',
+  salary: ['vendedor sem salário lançado', 'vendedores sem salário lançado'], commission: ['vendedor sem comissão configurada', 'vendedores sem comissão configurada'],
+  units: ['pedido sem quantidade de produtos', 'pedidos sem quantidade de produtos'], payment_fee: ['pedido sem taxa de pagamento', 'pedidos sem taxa de pagamento'],
+  received_amount: ['pagamento sem valor recebido', 'pagamentos sem valor recebido'], external_commission: ['pedido sem comissão externa informada', 'pedidos sem comissão externa informada'],
 }
 
-export function PendingReasons({ row, onConfigure }) {
+export function PendingReasons({ row, onConfigure, compact = false }) {
   const entries = Object.entries(row.pending || {}).filter(([, count]) => Number(count) > 0)
   if (!entries.length) return null
   const editable = Number(row.pending.salary || 0) + Number(row.pending.commission || 0) > 0
   const source = ['units', 'payment_fee', 'received_amount', 'external_commission'].some((key) => Number(row.pending[key] || 0) > 0)
-  return <div className="fw-pending">
-    <strong>Resultado pendente</strong>
-    <ul>{entries.map(([key, count]) => <li key={key}>{count} × {pendingLabels[key] || key}</li>)}</ul>
-    {source && <p>Dados de origem pendentes. É preciso recuperar esses valores dos pedidos/pagamentos; o formulário de remuneração não corrige essas lacunas.</p>}
-    {editable && onConfigure && <button type="button" className="fw-link" onClick={onConfigure}>Lançar remuneração{row.seller_id ? ` de ${row.seller_name}` : ''}</button>}
+  return <div className={`fw-pending${compact ? ' compact' : ''}`}>
+    {!compact && <strong>Faltam dados para fechar o resultado</strong>}
+    <ul>{entries.map(([key, count]) => <li key={key}>{count} {pendingLabels[key]?.[Number(count) === 1 ? 0 : 1] || key}</li>)}</ul>
+    {source && !compact && <p>Dados ausentes serão atualizados ao receber as informações dos pedidos e pagamentos.</p>}
+    {editable && onConfigure && <button type="button" className="fw-link" onClick={onConfigure}>Configurar remuneração{row.seller_id ? ` de ${row.seller_name}` : ''}</button>}
   </div>
 }
 
@@ -39,27 +39,27 @@ export function FinancialBars({ row }) {
     {complete ? <p className={`fw-breakeven ${bars.remaining > 0 ? 'negative' : 'positive'}`}>
       {cost > 0 && <span>{formatPercent(revenue / cost * 100)} do custo coberto · </span>}
       {bars.remaining > 0 ? `Faltam ${formatMoney(bars.remaining)} para se pagar`
-        : bars.surplus > 0 ? `Se pagou · excedente de ${formatMoney(bars.surplus)}` : 'No ponto de equilíbrio'}
-    </p> : <p className="fw-muted">Subtotais conhecidos. Equilíbrio disponível após resolver as pendências.</p>}
+        : bars.surplus > 0 ? `Excedente de ${formatMoney(bars.surplus)}` : 'Custo coberto'}
+    </p> : null}
   </div>
 }
 
 export function CostDetails({ row }) {
-  return <details className="fw-details"><summary>Detalhar valores</summary><dl>
-    <div><dt>Receita agendada</dt><dd>{formatMoney(row.scheduled_revenue)}</dd></div>
-    <div><dt>Recebido conhecido</dt><dd>{formatMoney(row.known_received_revenue)}</dd></div>
+  return <details className="fw-details"><summary>Composição dos custos</summary><dl>
     {costFields.map(([key, label]) => <div key={key}><dt>{costLabel(row, key, label)}{key === 'commission_cost' ? ` (${formatPercent(row.commission_pct)})` : ''}</dt><dd>{formatMoney(row[key])}</dd></div>)}
     <div className="fw-total"><dt>{row.total_cost == null ? 'Subtotal de custos conhecidos' : 'Custo total'}</dt><dd>{formatMoney(row.total_cost ?? row.known_cost)}</dd></div>
   </dl></details>
 }
 
 export function FinancialMetrics({ row, dashboard = false }) {
-  return <div className={`fw-metrics${dashboard ? ' fw-dashboard-metrics' : ''}`}>
-    {[
+  const result = [['Lucro confirmado', formatMoney(row.confirmed_profit)], ['Margem', formatPercent(row.margin_pct)]]
+  const metrics = dashboard ? [
       ['Receita agendada', formatMoney(row.scheduled_revenue)],
       [row.confirmed_revenue == null ? 'Recebido conhecido' : 'Recebido confirmado', formatMoney(row.known_received_revenue)],
       [row.total_cost == null ? 'Custos conhecidos · subtotal' : 'Custo total', formatMoney(row.total_cost ?? row.known_cost)],
-      ['Lucro confirmado', formatMoney(row.confirmed_profit)], ['Margem', formatPercent(row.margin_pct)],
-    ].map(([label, value]) => <div key={label}><span>{label}</span><strong className={label === 'Lucro confirmado' && row.confirmed_profit != null ? Number(row.confirmed_profit) < 0 ? 'fw-profit-negative' : 'fw-profit-positive' : undefined}>{value}</strong></div>)}
+      ...result,
+    ] : [...result, ['Receita agendada', formatMoney(row.scheduled_revenue)]]
+  return <div className={`fw-metrics${dashboard ? ' fw-dashboard-metrics' : ''}`}>
+    {metrics.map(([label, value]) => <div key={label}><span>{label}</span><strong className={label === 'Lucro confirmado' && row.confirmed_profit != null ? Number(row.confirmed_profit) < 0 ? 'fw-profit-negative' : 'fw-profit-positive' : undefined}>{value}</strong></div>)}
   </div>
 }

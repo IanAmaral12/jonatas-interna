@@ -1737,14 +1737,12 @@ function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
             <LayoutDashboard size={19} />
             <span>Dashboard</span>
           </button>
-          {[
-            ['costs', 'Custos'], ['ranking', 'Ranking de vendedores'], ['dashboard', 'Dashboard financeiro'],
-          ].map(([view, label]) => <button
-            className={`sidebar-nav-item${activePage === `financial-${view}` ? ' active' : ''}`}
-            type="button" key={view}
-            aria-current={activePage === `financial-${view}` ? 'page' : undefined}
-            onClick={() => setActivePage(`financial-${view}`)}
-          ><ReceiptText size={19} /><span>{label}</span></button>)}
+          <button
+            className={`sidebar-nav-item${activePage.startsWith('financial-') ? ' active' : ''}`}
+            type="button"
+            aria-current={activePage.startsWith('financial-') ? 'page' : undefined}
+            onClick={() => { if (!activePage.startsWith('financial-')) setActivePage('financial-dashboard') }}
+          ><ReceiptText size={19} /><span>Financeiro</span></button>
           <button
             className={`sidebar-nav-item${activePage === 'cash-flow' ? ' active' : ''}`}
             type="button"

@@ -10,6 +10,7 @@ function currentMonth() {
 }
 
 const titles = { dashboard: 'Dashboard financeiro', ranking: 'Ranking de vendedores', costs: 'Custos' }
+const tabs = { dashboard: 'Visão geral', ranking: 'Ranking', costs: 'Custos' }
 
 export default function FinancialWorkspace({ view = 'dashboard', onViewChange }) {
   const [month, setMonth] = useState(currentMonth)
@@ -51,17 +52,17 @@ export default function FinancialWorkspace({ view = 'dashboard', onViewChange })
   }
 
   return <section className="dashboard-content fw-page" aria-labelledby="fw-title">
-    <header className="dashboard-header fw-header"><div><span className="dashboard-eyebrow">Controle financeiro</span><h1 id="fw-title">{titles[view]}</h1><p>{view === 'costs' ? 'Lance remuneração, impostos e despesas em três passos.' : view === 'ranking' ? 'Quem já se pagou? Compare custos e recebimentos confirmados.' : 'Receita, custos e resultado do mês em uma base consolidada.'}</p></div>
-      <div className="fw-header-controls"><label htmlFor="fw-month">Mês dos pedidos<input id="fw-month" type="month" value={month} onChange={(event) => { if (/^\d{4}-\d{2}$/.test(event.target.value)) { setMonth(event.target.value); setError('') } }} /></label><button type="button" className="fw-secondary" disabled={refreshing} onClick={refresh}>{refreshing ? 'Atualizando…' : 'Atualizar'}</button></div>
+    <header className="dashboard-header fw-header"><div><h1 id="fw-title">{titles[view]}</h1><p>{view === 'costs' ? 'Gerencie a remuneração e os lançamentos do mês.' : view === 'ranking' ? 'Compare o lucro confirmado e a evolução até o equilíbrio.' : 'Resultado consolidado dos pedidos do mês.'}</p></div>
+      <div className="fw-header-controls"><label htmlFor="fw-month">Mês de referência<input id="fw-month" type="month" value={month} onChange={(event) => { if (/^\d{4}-\d{2}$/.test(event.target.value)) { setMonth(event.target.value); setError('') } }} /></label><button type="button" className="fw-secondary" disabled={refreshing} onClick={refresh}>{refreshing ? 'Atualizando…' : 'Atualizar'}</button></div>
     </header>
-    <nav className="fw-tabs" aria-label="Financeiro">{Object.entries(titles).map(([key, title]) => <button type="button" key={key} aria-current={view === key ? 'page' : undefined} className={view === key ? 'active' : ''} onClick={() => onViewChange(key)}>{title}</button>)}</nav>
-    <p className="fw-period-note">Competência pelo mês de criação do pedido. Recebimentos tardios atualizam esse mesmo mês. Atualização automática a cada minuto.</p>
+    <div className="fw-navigation"><nav className="fw-tabs" aria-label="Seções do financeiro">{Object.entries(tabs).map(([key, title]) => <button type="button" key={key} aria-current={view === key ? 'page' : undefined} className={view === key ? 'active' : ''} onClick={() => onViewChange(key)}>{title}</button>)}</nav>
+      <details className="fw-period-help"><summary>Sobre o período</summary><p>Os pedidos pertencem ao mês de criação. Pagamentos posteriores atualizam o resultado desse mesmo mês.</p></details></div>
     {error && <p className="fw-message error" role="alert">{error} <button type="button" className="fw-link" onClick={refresh}>Tentar novamente</button></p>}
     {!data && !error && <p role="status">Carregando dados financeiros…</p>}
     {data && <>
       {view === 'dashboard' && <FinancialDashboardPage data={data} onConfigure={configure} />}
       {view === 'ranking' && <SellerFinancialRankingPage data={data} onConfigure={configure} />}
-      <FinancialCostsPage data={data} month={month} sellerId={sellerId} onSelectSeller={setSellerId} onRefresh={refresh} active={view === 'costs'} onRanking={() => onViewChange('ranking')} />
+      <FinancialCostsPage data={data} month={month} sellerId={sellerId} onSelectSeller={setSellerId} onRefresh={refresh} active={view === 'costs'} />
     </>}
   </section>
 }
