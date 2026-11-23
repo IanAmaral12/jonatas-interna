@@ -2,10 +2,15 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import {
   convertSpend,
+  DAILY_EXCHANGE_RATE_START,
+  exchangeRateForDate,
+  fetchExchangeRates,
   fixedExchangeRate,
   FIXED_USD_BRL_BASE_RATE,
   FIXED_USD_BRL_SURCHARGE,
   preserveExistingConversion,
+  shiftDate,
+  USD_BRL_SURCHARGE,
 } from "./exchange-rate.js";
 
 type JsonObject = Record<string, unknown>;
@@ -72,8 +77,17 @@ interface ExchangeRate {
   base: "USD";
   quote: "BRL";
   rate: number;
-  source: "fixed";
+  source: "fixed" | "Frankfurter v2";
+  provider?: string;
+  baseRate?: number;
   rawPayload: JsonObject;
+}
+
+interface RateObservation {
+  date: string;
+  base: string;
+  quote: string;
+  rate: number;
 }
 
 const GRAPH_VERSION = "v26.0";
@@ -227,8 +241,10 @@ async function loadConfiguredAccount(
   return { account, tokenSlot };
 }
 
-function loadExchangeRate(targetDate: string): ExchangeRate {
-  return fixedExchangeRate(targetDate) as ExchangeRate;
+function loadExchangeRate(targetDate: string, observations: RateObservation[]): ExchangeRate {
+  return (targetDate < DAILY_EXCHANGE_RATE_START
+    ? fixedExchangeRate(targetDate)
+    : exchangeRateForDate(targetDate, observations)) as ExchangeRate;
 }
 
 async function keepStoredConversions(
@@ -239,6 +255,7 @@ async function keepStoredConversions(
   exchangeRate: ExchangeRate,
 ): Promise<JsonObject[]> {
   if (rows.length === 0) return rows;
+  if (account.currency === "USD" && metricDate >= DAILY_EXCHANGE_RATE_START) return rows;
 
   const storedRows: JsonObject[] = [];
   const pageSize = 1000;
@@ -266,6 +283,7 @@ async function keepStoredConversions(
     row,
     storedByBucket.get(`${row.campaign_id}:${row.hour_start}`),
     exchangeRate,
+    metricDate,
   ));
 }
 
@@ -479,8 +497,27 @@ Deno.serve(async (request) => {
   let campaignMappings: JsonObject[] = [];
 
   try {
+    const today = dateInTimezone(new Date(), "America/Sao_Paulo");
+    const rateEnd = mode === "sync" ? today : requestedDates[requestedDates.length - 1];
+    const requestedRateStart = mode === "sync" ? shiftDate(today, -7) : requestedDates[0];
+    const rateStart = requestedRateStart < DAILY_EXCHANGE_RATE_START
+      ? DAILY_EXCHANGE_RATE_START : requestedRateStart;
+    const observations: RateObservation[] = rateEnd >= DAILY_EXCHANGE_RATE_START
+      ? await fetchExchangeRates(rateStart, rateEnd)
+      : [];
+    const reconcileRates = async () => {
+      if (observations.length === 0) return;
+      const { error } = await supabase.rpc("revalue_meta_usd_spend", {
+        p_start_date: rateStart,
+        p_end_date: rateEnd,
+        p_rates: observations,
+      });
+      if (error) throw new Error(`Falha ao atualizar o câmbio do tráfego: ${error.message}`);
+    };
+    // Also finalize previous days once their BCB closing rate becomes available.
+    await reconcileRates();
     const exchangeRate = mode === "sync"
-      ? loadExchangeRate(dateInTimezone(new Date(), "America/Sao_Paulo"))
+      ? loadExchangeRate(today, observations)
       : null;
     const selectedBindings = mode === "historical_backfill"
       ? ACCOUNT_BINDINGS.filter((binding) => requestedAccountIds.includes(binding.accountId))
@@ -530,7 +567,7 @@ Deno.serve(async (request) => {
       if (mode === "sync" && exchangeRate) {
         try {
           const metricDate = dateInTimezone(new Date(), account.timezone_name);
-          const accountExchangeRate = loadExchangeRate(metricDate);
+          const accountExchangeRate = loadExchangeRate(metricDate, observations);
           const fetched = await fetchAccountInsights(
             discovered,
             accountExchangeRate,
@@ -579,7 +616,7 @@ Deno.serve(async (request) => {
       if (mode === "historical_backfill") {
         for (const metricDate of requestedDates) {
           try {
-            const historicalRate = loadExchangeRate(metricDate);
+            const historicalRate = loadExchangeRate(metricDate, observations);
             const fetched = await fetchAccountInsights(
               discovered,
               historicalRate,
@@ -697,6 +734,8 @@ Deno.serve(async (request) => {
       }
     }
 
+    // Round stored USD conversions with Postgres numeric arithmetic after new snapshots.
+    await reconcileRates();
     const status = errors.length === 0 ? "completed" : accountsSynced > 0 ? "partial" : "failed";
     await supabase.from("meta_sync_runs").update({
       finished_at: new Date().toISOString(),
@@ -720,9 +759,11 @@ Deno.serve(async (request) => {
           date: exchangeRate.date,
           usd_brl: exchangeRate.rate,
           source: exchangeRate.source,
-          provider: "fixed",
-          base_usd_brl: FIXED_USD_BRL_BASE_RATE,
-          surcharge_percentage: FIXED_USD_BRL_SURCHARGE * 100,
+          provider: exchangeRate.provider ?? "fixed",
+          base_usd_brl: exchangeRate.baseRate ?? FIXED_USD_BRL_BASE_RATE,
+          surcharge_percentage: exchangeRate.source === "fixed"
+            ? FIXED_USD_BRL_SURCHARGE * 100
+            : Number((USD_BRL_SURCHARGE * 100).toFixed(2)),
         }
         : undefined,
       status,

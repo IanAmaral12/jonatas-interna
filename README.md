@@ -83,7 +83,9 @@ A Edge Function privada `meta-ads-sync` usa a Graph API v26 para consultar as se
 
 O banco preserva moeda, fuso da conta, hora local da Meta e o instante equivalente em UTC. Campanhas são relacionadas aos vendedores por aliases normalizados e o dashboard calcula o CPA como investimento dividido por pedidos não cancelados no mesmo período.
 
-Custos originais ficam registrados em `spend`, enquanto `spend_usd` e `spend_brl` preservam os dois valores convertidos. Novos gastos usam a taxa fixa de R$ 5,60 por dólar acrescida de 3,5%, resultando em R$ 5,796 por USD. A parcela já armazenada não é recalculada; quando um retrato horário aumenta, somente a diferença recebe a taxa vigente. O frontend sempre usa `spend_brl`.
+Custos originais ficam registrados em `spend`, enquanto `spend_usd` e `spend_brl` registram os valores convertidos. Desde 01/11/2026, o tráfego em USD usa a cotação diária USD/BRL do Banco Central pela [API Frankfurter v2](https://frankfurter.dev/), filtrada por `providers=BCB`, acrescida de 7% (`cotação × 1,07`). Para cada dia de gasto, vale a última cotação publicada até aquela data, incluindo fins de semana e feriados; referências com mais de 14 dias são rejeitadas. A cotação e sua data efetiva ficam registradas em cada linha; `meta_exchange_rates` guarda a referência original, sem o acréscimo.
+
+Cada sincronização consulta a API uma vez e reconcilia os últimos sete dias, incorporando fechamentos publicados após a coleta inicial. A conversão de cada retrato em USD é refeita integralmente a partir de `spend`, sem acumular acréscimos. Se a API falhar ou devolver dados inválidos, a execução registra o erro e preserva os dados existentes até a próxima tentativa agendada. Gastos em BRL e conversões anteriores a novembro ficam preservados; para novos registros anteriores a novembro permanece a regra histórica de R$ 5,796 por USD. O frontend sempre usa `spend_brl`.
 
 ### Métricas comerciais
 
@@ -127,8 +129,9 @@ contas, use o modo `historical_backfill` com a lista explícita de IDs:
 }
 ```
 
-Nesse modo, dados ainda inexistentes usam a taxa fixa vigente. Conversões já
-armazenadas são preservadas. O limite continua sendo 31 dias.
+Nesse modo, registros em USD a partir de 01/11/2026 são convertidos pela cotação
+histórica de cada dia mais 7%, inclusive quando o gasto original não mudou.
+Conversões anteriores a novembro são preservadas. O limite continua sendo 31 dias.
 
 Para ativar a integração, cadastre `META_ACCESS_TOKEN_1` e `META_ACCESS_TOKEN_2` nos secrets do Supabase e execute:
 
