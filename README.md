@@ -141,6 +141,14 @@ Para ativar a integração, cadastre `META_ACCESS_TOKEN_1` e `META_ACCESS_TOKEN_
 
 O script publica a função, executa a primeira sincronização e agenda novas coletas a cada 10 minutos. Tokens nunca devem ser adicionados ao Git ou expostos em variáveis `VITE_*`.
 
+### Reconciliação de pagamentos da Skale
+
+Os webhooks não cobrem necessariamente pagamentos manuais e cobranças divididas antigas. Quando a Skale confirma um recebimento que não consta do webhook, consulte `get_pedido_por_id` e `get_pagamentos_do_pedido` no escopo interno. O parser `scripts/skale-payment-evidence.js` valida o pedido, a quantidade de cobranças e a igualdade entre a soma das parcelas pagas, o total confirmado e o valor pago do pedido; descarta dados pessoais da resposta.
+
+A RPC `reconcile_confirmed_order_payments` é exclusiva de `service_role`. Ela registra a evidência em `order_payment_reconciliations`, substitui o retrato financeiro pelo total confirmado e atualiza o status exibido do pedido. Repetir a mesma observação não soma dinheiro; um mesmo identificador de pagamento não pode pertencer a dois pedidos. A data de criação e os custos existentes permanecem preservados. Taxa ausente continua pendente.
+
+O merge financeiro impede que replays antigos ou um `total_price` posterior substituam um recebimento confirmado pela Skale. Fatos posteriores com `paid_amount` explícito continuam atualizáveis. Uma reconciliação periódica independente dos webhooks exige uma credencial própria de API em produção; o login interativo do MCP não é instalado como credencial do servidor.
+
 ### Fluxo de caixa
 
 A página **Fluxo de caixa** permite que usuários autenticados cadastrem

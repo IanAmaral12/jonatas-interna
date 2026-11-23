@@ -11,7 +11,7 @@ test('financial snapshots parse cents, merge versions, backfill and restrict acc
   const db = new PGlite()
   try {
     await db.exec(`create role anon; create role authenticated; create role service_role;
-      create table public.orders(id text primary key);
+      create table public.orders(id text primary key,status_pagamento text,data_pagamento date);
       insert into public.orders values ('one'),('partial'),('zero'),('history'),('empty'),('backfill'),('tie');
       create schema pgmq;
       create table pgmq.a_orders_ingest(msg_id bigint, enqueued_at timestamptz, message jsonb);
@@ -22,6 +22,9 @@ test('financial snapshots parse cents, merge versions, backfill and restrict acc
     const name = files.find(f => f.endsWith('_order_financial_snapshots.sql'))
     assert.ok(name, 'snapshot migration exists')
     await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'))
+    const reconciliation = files.find(f => f.endsWith('_reconcile_confirmed_order_payments.sql'))
+    assert.ok(reconciliation, 'payment reconciliation migration exists')
+    await db.exec(await readFile(new URL(`../supabase/migrations/${reconciliation}`, import.meta.url), 'utf8'))
     const write = (id, payload, msg, date = '2026-10-20T12:00:00Z') => db.query(
       'select public.record_order_financial_snapshot($1,$2,$3,$4)', [id, payload, msg, date])
     const row = async id => (await db.query('select * from public.order_financial_snapshots where order_id=$1', [id])).rows[0]

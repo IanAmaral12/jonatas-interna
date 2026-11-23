@@ -19,7 +19,7 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
       create table public.meta_campaigns(id text primary key,ad_account_id text,seller_id uuid);
       create table public.meta_campaign_hourly_insights(campaign_id text,ad_account_id text,bucket_start timestamptz,spend_brl numeric);`)
     const files = await readdir(new URL('../supabase/migrations/', import.meta.url))
-    for (const suffix of ['_create_financial_dre.sql', '_order_financial_snapshots.sql', '_financial_workspace.sql', '_financial_workspace_money_precision.sql']) {
+    for (const suffix of ['_create_financial_dre.sql', '_order_financial_snapshots.sql', '_financial_workspace.sql', '_financial_workspace_money_precision.sql', '_reconcile_confirmed_order_payments.sql']) {
       const name = files.find(f => f.endsWith(suffix))
       assert.ok(name, `${suffix} migration exists`)
       await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'))
