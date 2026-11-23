@@ -44,16 +44,20 @@ test('monthly DRE reconciles costs, payments, settings, and access', async (t) =
                ('november','${sellerA}','2026-11-01 03:30+00',100,'Pago',1);
       update public.orders set cancelado=true where id='cancelled';
       insert into public.meta_ad_accounts(id,account_id) values
-        ('regular','regular'), ('excluded','1392600858079467');
+        ('regular','regular'), ('excluded','1392600858079467'),('excluded-ca2','1266025311173661');
       insert into public.meta_campaigns(id,ad_account_id,seller_id) values
         ('seller','regular','${sellerA}'),
         ('unassigned','regular',null),
         ('excluded-account','excluded','${sellerA}'),
+        ('excluded-ca2-seller','excluded-ca2','${sellerA}'),
+        ('excluded-ca2-unassigned','excluded-ca2',null),
         ('52598941009722','regular','${sellerA}');
       insert into public.meta_campaign_hourly_insights(campaign_id,ad_account_id,bucket_start,spend_brl) values
         ('seller','regular','2026-10-15 12:00+00',500),
         ('unassigned','regular','2026-10-15 12:00+00',20),
         ('excluded-account','excluded','2026-10-15 12:00+00',100),
+        ('excluded-ca2-seller','excluded-ca2','2026-10-15 12:00+00',5000),
+        ('excluded-ca2-unassigned','excluded-ca2','2026-10-15 12:00+00',3000),
         ('52598941009722','regular','2026-10-15 12:00+00',50);
     `)
     const filenames = await readdir(new URL('../supabase/migrations/', import.meta.url))
@@ -63,6 +67,12 @@ test('monthly DRE reconciles costs, payments, settings, and access', async (t) =
     const refinement = filenames.find((file) => file.endsWith('_refine_financial_dre_cost_components.sql'))
     assert.ok(refinement, 'financial DRE refinement exists')
     await db.exec(await readFile(new URL(`../supabase/migrations/${refinement}`, import.meta.url), 'utf8'))
+    const exclusion = filenames.find(file => file.endsWith('_exclude_ca2_jc_traffic_costs.sql'))
+    assert.ok(exclusion, 'CA2 exclusion migration exists')
+    const exclusionSql = await readFile(new URL(`../supabase/migrations/${exclusion}`, import.meta.url), 'utf8')
+    const dreFunction = exclusionSql.match(/create or replace function public\.get_financial_dre\([\s\S]*?\n\$\$;/)?.[0]
+    assert.ok(dreFunction)
+    await db.exec(dreFunction)
 
     const asRole = async (role, action) => {
       await db.exec(`set role ${role}`)

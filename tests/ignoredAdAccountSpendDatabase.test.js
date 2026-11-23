@@ -1,9 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
+import { readdir, readFile } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 
-test('dashboard ignores spend from the CA1 - JC account and CURTIDA 01 campaign', async () => {
+test('dashboard ignores historical and future costs from CA1 - JC, CA2 - JC and CURTIDA 01', async () => {
   const db = new PGlite()
   try {
     await db.exec(`
@@ -43,9 +43,12 @@ test('dashboard ignores spend from the CA1 - JC account and CURTIDA 01 campaign'
       values ('11111111-1111-1111-1111-111111111111', 'Ana');
       insert into public.meta_ad_accounts (id, account_id, name) values
         ('ignored-account', '1392600858079467', 'CA1 - JC'),
+        ('ignored-ca2', '1266025311173661', 'CA2 - JC'),
         ('regular-account', '1010965721683924', 'Conta principal');
       insert into public.meta_campaigns (id, ad_account_id, seller_id) values
         ('ignored-account-campaign', 'ignored-account', null),
+        ('ca2-seller', 'ignored-ca2', '11111111-1111-1111-1111-111111111111'),
+        ('ca2-unmatched', 'ignored-ca2', null),
         ('52598941009722', 'regular-account', null),
         ('unmatched-campaign', 'regular-account', null),
         ('matched-campaign', 'regular-account', '11111111-1111-1111-1111-111111111111');
@@ -53,13 +56,18 @@ test('dashboard ignores spend from the CA1 - JC account and CURTIDA 01 campaign'
         ad_account_id, campaign_id, bucket_start, spend_brl
       ) values
         ('ignored-account', 'ignored-account-campaign', '2026-10-12 12:00:00-03', 100),
+        ('ignored-ca2', 'ca2-seller', '2026-10-12 12:00:00-03', 200),
+        ('ignored-ca2', 'ca2-unmatched', '2026-10-12 12:00:00-03', 70),
         ('regular-account', '52598941009722', '2026-10-12 12:00:00-03', 40),
         ('regular-account', 'unmatched-campaign', '2026-10-12 12:00:00-03', 30),
         ('regular-account', 'matched-campaign', '2026-10-12 12:00:00-03', 50);
     `)
 
+    const files = await readdir(new URL('../supabase/migrations/', import.meta.url))
+    const name = files.find(file => file.endsWith('_exclude_ca2_jc_traffic_costs.sql'))
+    assert.ok(name, 'CA2 exclusion migration exists')
     const migration = await readFile(
-      new URL('../supabase/migrations/20261012120000_ignore_ca_1_jc_spend.sql', import.meta.url),
+      new URL(`../supabase/migrations/${name}`, import.meta.url),
       'utf8',
     )
     const dashboardFunction = migration.match(
@@ -77,6 +85,9 @@ test('dashboard ignores spend from the CA1 - JC account and CURTIDA 01 campaign'
       { row_type: 'seller', seller_name: 'Ana', spend: '50' },
       { row_type: 'unmatched', seller_name: 'Não atribuído', spend: '30' },
     ])
+    await db.exec("insert into public.meta_campaign_hourly_insights values ('ignored-ca2','ca2-seller','2026-10-12 13:00:00-03',999)")
+    assert.deepEqual((await db.query("select row_type, seller_name, spend from public.get_cpa_dashboard('2026-10-12', '2026-10-12')")).rows, rows)
+    assert.equal((await db.query('select sum(spend_brl)::text total from public.meta_campaign_hourly_insights')).rows[0].total,'1489')
   } finally {
     await db.close()
   }

@@ -24,15 +24,23 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
       assert.ok(name, `${suffix} migration exists`)
       await db.exec(await readFile(new URL(`../supabase/migrations/${name}`, import.meta.url), 'utf8'))
     }
+    const exclusion = files.find(file => file.endsWith('_exclude_ca2_jc_traffic_costs.sql'))
+    assert.ok(exclusion, 'CA2 exclusion migration exists')
+    const exclusionSql = await readFile(new URL(`../supabase/migrations/${exclusion}`, import.meta.url), 'utf8')
+    const workspaceFunction = exclusionSql.match(/create or replace function public\.get_financial_workspace\([\s\S]*?\n\$\$;/)?.[0]
+    assert.ok(workspaceFunction)
+    await db.exec(workspaceFunction)
     await db.exec(`insert into public.sellers values ('${ana}','Ana',true),('${bruno}','Bruno',false),('${carla}','Carla',true);
       insert into public.orders(id,seller_id,data,valor,status_pagamento,product_units)
         select 'a-'||n,'${ana}',case when n=10 then '2026-11-01 02:30+00'::timestamptz else '2026-10-15 12:00+00' end,
           1000, 'After Pay',1 from generate_series(1,10) n;
       insert into public.seller_financial_settings values ('${ana}','2026-10-01',1000,8);
-      insert into public.meta_ad_accounts values ('regular','regular'),('excluded','1392600858079467');
-      insert into public.meta_campaigns values ('seller','regular','${ana}'),('excluded','excluded','${ana}'),('52598941009722','regular','${ana}');
+      insert into public.meta_ad_accounts values ('regular','regular'),('excluded','1392600858079467'),('excluded-ca2','1266025311173661');
+      insert into public.meta_campaigns values ('seller','regular','${ana}'),('excluded','excluded','${ana}'),('52598941009722','regular','${ana}'),
+        ('excluded-ca2-seller','excluded-ca2','${ana}'),('excluded-ca2-unassigned','excluded-ca2',null);
       insert into public.meta_campaign_hourly_insights values ('seller','regular','2026-10-15 12:00+00',500),
-        ('excluded','excluded','2026-10-15 12:00+00',100),('52598941009722','regular','2026-10-15 12:00+00',100);
+        ('excluded','excluded','2026-10-15 12:00+00',100),('52598941009722','regular','2026-10-15 12:00+00',100),
+        ('excluded-ca2-seller','excluded-ca2','2026-10-15 12:00+00',5000),('excluded-ca2-unassigned','excluded-ca2','2026-10-15 12:00+00',3000);
       insert into public.financial_monthly_taxes values ('2026-10-01',10);
       insert into public.financial_cost_entries(description,amount,cost_date) values ('General expense',40,'2026-10-15');`)
     const write = (id,payload,msg=1) => db.query('select public.record_order_financial_snapshot($1,$2,$3,$4)',[id,payload,msg,'2026-11-05T12:00:00Z'])
