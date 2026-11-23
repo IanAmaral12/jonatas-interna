@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readdir, readFile } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 
-test('dashboard ignores historical and future costs from CA1 - JC, CA2 - JC and CURTIDA 01', async () => {
+test('dashboard excludes historical and future costs only from ignored accounts and campaigns', async () => {
   const db = new PGlite()
   try {
     await db.exec(`
@@ -50,6 +50,7 @@ test('dashboard ignores historical and future costs from CA1 - JC, CA2 - JC and 
         ('ca2-seller', 'ignored-ca2', '11111111-1111-1111-1111-111111111111'),
         ('ca2-unmatched', 'ignored-ca2', null),
         ('52598941009722', 'regular-account', null),
+        ('52542462971990', 'regular-account', null),
         ('unmatched-campaign', 'regular-account', null),
         ('matched-campaign', 'regular-account', '11111111-1111-1111-1111-111111111111');
       insert into public.meta_campaign_hourly_insights (
@@ -59,13 +60,14 @@ test('dashboard ignores historical and future costs from CA1 - JC, CA2 - JC and 
         ('ignored-ca2', 'ca2-seller', '2026-10-12 12:00:00-03', 200),
         ('ignored-ca2', 'ca2-unmatched', '2026-10-12 12:00:00-03', 70),
         ('regular-account', '52598941009722', '2026-10-12 12:00:00-03', 40),
+        ('regular-account', '52542462971990', '2026-10-12 12:00:00-03', 75),
         ('regular-account', 'unmatched-campaign', '2026-10-12 12:00:00-03', 30),
         ('regular-account', 'matched-campaign', '2026-10-12 12:00:00-03', 50);
     `)
 
     const files = await readdir(new URL('../supabase/migrations/', import.meta.url))
-    const name = files.find(file => file.endsWith('_exclude_ca2_jc_traffic_costs.sql'))
-    assert.ok(name, 'CA2 exclusion migration exists')
+    const name = files.find(file => file.endsWith('_exclude_cp_curtida01_traffic_costs.sql'))
+    assert.ok(name, 'CP CURTIDA01 exclusion migration exists')
     const migration = await readFile(
       new URL(`../supabase/migrations/${name}`, import.meta.url),
       'utf8',
@@ -86,8 +88,9 @@ test('dashboard ignores historical and future costs from CA1 - JC, CA2 - JC and 
       { row_type: 'unmatched', seller_name: 'Não atribuído', spend: '30' },
     ])
     await db.exec("insert into public.meta_campaign_hourly_insights values ('ignored-ca2','ca2-seller','2026-10-12 13:00:00-03',999)")
+    await db.exec("insert into public.meta_campaign_hourly_insights values ('regular-account','52542462971990','2026-10-12 13:00:00-03',999)")
     assert.deepEqual((await db.query("select row_type, seller_name, spend from public.get_cpa_dashboard('2026-10-12', '2026-10-12')")).rows, rows)
-    assert.equal((await db.query('select sum(spend_brl)::text total from public.meta_campaign_hourly_insights')).rows[0].total,'1489')
+    assert.equal((await db.query('select sum(spend_brl)::text total from public.meta_campaign_hourly_insights')).rows[0].total,'2563')
   } finally {
     await db.close()
   }
