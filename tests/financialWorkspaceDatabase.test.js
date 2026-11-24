@@ -33,6 +33,9 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
     const partialResults = files.find(file => file.endsWith('_show_partial_financial_results.sql'))
     assert.ok(partialResults, 'partial financial results migration exists')
     await db.exec(await readFile(new URL(`../supabase/migrations/${partialResults}`, import.meta.url), 'utf8'))
+    const internalPayments = files.find(file => file.endsWith('_internal_payment_zero_fee.sql'))
+    assert.ok(internalPayments, 'internal payment fee migration exists')
+    await db.exec(await readFile(new URL(`../supabase/migrations/${internalPayments}`, import.meta.url), 'utf8'))
     await db.exec(`insert into public.sellers values ('${ana}','Ana',true),('${bruno}','Bruno',false),('${carla}','Carla',true);
       insert into public.orders(id,seller_id,data,valor,status_pagamento,product_units)
         select 'a-'||n,'${ana}',case when n=10 then '2026-11-01 02:30+00'::timestamptz else '2026-10-15 12:00+00' end,
@@ -103,6 +106,45 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
       assert.equal(row.confirmed_revenue,3000)
       assert.equal(row.confirmed_profit,266)
       assert.equal(row.remaining_to_break_even,0)
+    })
+    await check('internal paid and partial payments default to zero fee without changing source evidence or Skale costs',async()=>{
+      for (const payment_status of ['Pago','Pago Parcial']) {
+        await write('a-3',{skaletracking:{plataforma:'  PAGAMENTO INTERNO  '},
+          transaction:{payment_status,paid_amount:10000,acquirer_cost:null,affiliate_earned:0}})
+        const result=await workspace(); const row=result.rows[0]
+        assert.equal(row.pending.payment_fee,0)
+        assert.equal(result.summary.pending.payment_fee,0)
+        assert.equal(row.payment_fee_cost,30)
+        assert.equal(row.skale_cost,5)
+        assert.equal(row.confirmed_revenue,3100)
+        assert.equal(row.confirmed_profit,366)
+        const source=(await db.query("select payment_fee from public.order_financial_snapshots where order_id='a-3'")).rows[0]
+        assert.equal(source.payment_fee,null)
+      }
+    })
+    await check('internal payments preserve real fees from mixed gateway payments',async()=>{
+      await write('a-1',{skaletracking:{plataforma:'Pagamento Interno'},transaction:{payment_status:'Pago'}},2)
+      const row=(await workspace()).rows[0]
+      assert.equal(row.payment_fee_cost,30)
+      assert.equal(row.pending.payment_fee,0)
+      assert.equal((await db.query("select payment_fee from public.order_financial_snapshots where order_id='a-1'")).rows[0].payment_fee,'10.00')
+    })
+    await check('switching from internal to gateway restores missing-fee alerts and stale events cannot suppress them',async()=>{
+      await write('a-3',{skaletracking:{plataforma:'Pagamento Interno'},transaction:{payment_status:'Pago',paid_amount:10000,affiliate_earned:0}},1)
+      assert.equal((await workspace()).rows[0].pending.payment_fee,0)
+      await write('a-3',{skaletracking:{plataforma:'PagarMe'},transaction:{payment_method:'Pix'}},3)
+      assert.equal((await workspace()).rows[0].pending.payment_fee,1)
+      await write('a-3',{skaletracking:{plataforma:'Pagamento Interno'}},2)
+      assert.equal((await workspace()).rows[0].pending.payment_fee,1)
+      await write('a-3',{skaletracking:{plataforma:'Pagamento Interno - outro'}},4)
+      assert.equal((await workspace()).rows[0].pending.payment_fee,1)
+    })
+    await check('internal payments remove only the fee alert while other missing values remain explicit',async()=>{
+      await write('a-3',{skaletracking:{plataforma:'Pagamento Interno'},transaction:{payment_status:'Pago Parcial'}})
+      const row=(await workspace()).rows[0]
+      assert.equal(row.pending.payment_fee,0)
+      assert.equal(row.pending.received_amount,1)
+      assert.equal(row.pending.external_commission,1)
     })
     await check('absent received values show a numeric loss without inventing paid revenue',async()=>{
       await db.exec('update public.order_financial_snapshots set received_amount=null,received_payment_status=null')

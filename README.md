@@ -147,6 +147,8 @@ A consulta `get_financial_workspace` calcula custo, receita recebida, lucro, mar
 
 Dashboard e ranking identificam esses resultados como parciais e mantêm os alertas. Todos os vendedores participam do ranking por lucro calculado. Completar os dados atualiza automaticamente os valores e a classificação.
 
+Na plataforma `Pagamento Interno`, taxa de pagamento ausente é considerada R$ 0 no cálculo financeiro e não gera alerta de taxa pendente. A regra usa a plataforma vigente do retrato financeiro, vale para pedidos históricos e futuros e preserva os dados de origem. Taxas explícitas continuam contabilizadas, inclusive em pedidos mistos com pagamentos por outros gateways. A cobrança de R$ 0,50 da Skale e alertas de outros dados ausentes permanecem independentes.
+
 ### Reconciliação de pagamentos da Skale
 
 Os webhooks não cobrem necessariamente pagamentos manuais e cobranças divididas antigas. Quando a Skale confirma um recebimento que não consta do webhook, consulte `get_pedido_por_id` e `get_pagamentos_do_pedido` no escopo interno. O parser `scripts/skale-payment-evidence.js` valida o pedido, a quantidade de cobranças e a igualdade entre a soma das parcelas pagas, o total confirmado e o valor pago do pedido; descarta dados pessoais da resposta.
