@@ -52,7 +52,7 @@ export default function FinancialWorkspace({ view = 'dashboard', onViewChange })
   }
 
   return <section className="dashboard-content fw-page" aria-labelledby="fw-title">
-    <header className="dashboard-header fw-header"><div><h1 id="fw-title">{titles[view]}</h1><p>{view === 'costs' ? 'Gerencie a remuneração e os lançamentos do mês.' : view === 'ranking' ? 'Compare o lucro confirmado e a evolução até o equilíbrio.' : 'Resultado consolidado dos pedidos do mês.'}</p></div>
+    <header className="dashboard-header fw-header"><div><h1 id="fw-title">{titles[view]}</h1><p>{view === 'costs' ? 'Gerencie a remuneração e os lançamentos do mês.' : view === 'ranking' ? 'Compare o resultado e a evolução até o equilíbrio.' : 'Resultado consolidado dos pedidos do mês.'}</p></div>
       <div className="fw-header-controls"><label htmlFor="fw-month">Mês de referência<input id="fw-month" type="month" value={month} onChange={(event) => { if (/^\d{4}-\d{2}$/.test(event.target.value)) { setMonth(event.target.value); setError('') } }} /></label><button type="button" className="fw-secondary" disabled={refreshing} onClick={refresh}>{refreshing ? 'Atualizando…' : 'Atualizar'}</button></div>
     </header>
     <div className="fw-navigation"><nav className="fw-tabs" aria-label="Seções do financeiro">{Object.entries(tabs).map(([key, title]) => <button type="button" key={key} aria-current={view === key ? 'page' : undefined} className={view === key ? 'active' : ''} onClick={() => onViewChange(key)}>{title}</button>)}</nav>

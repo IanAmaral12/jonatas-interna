@@ -2,18 +2,18 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { sortSellerRanking, sellerSettingChanges } from '../src/lib/financialWorkspace.js'
 
-test('ranking orders confirmed profits, retains losses and separates incomplete sellers without mutating rows', () => {
+test('ranking orders known profits including incomplete sellers without mutating rows', () => {
   const rows = Object.freeze([
-    Object.freeze({ row_type: 'seller', seller_id: 'pending', seller_name: 'Aline', confirmed_profit: null, pending: { payment_fee: 1 } }),
+    Object.freeze({ row_type: 'seller', seller_id: 'pending', seller_name: 'Aline', confirmed_profit: 80, pending: { payment_fee: 1 } }),
     Object.freeze({ row_type: 'seller', seller_id: 'loss', seller_name: 'Zeca', confirmed_profit: '-20', pending: {} }),
     Object.freeze({ row_type: 'seller', seller_id: 'b', seller_name: 'Bruna', confirmed_profit: '50', pending: {} }),
     Object.freeze({ row_type: 'unassigned', seller_name: 'Não atribuído', confirmed_profit: 999, pending: {} }),
     Object.freeze({ row_type: 'seller', seller_id: 'a', seller_name: 'Ana', confirmed_profit: 50, pending: {} }),
     Object.freeze({ row_type: 'seller', seller_id: 'best', seller_name: 'Carlos', confirmed_profit: 100, pending: {} }),
   ])
-  assert.deepEqual(sortSellerRanking(rows).map((row) => row.seller_id), ['best', 'a', 'b', 'loss', 'pending'])
+  assert.deepEqual(sortSellerRanking(rows).map((row) => row.seller_id), ['best', 'pending', 'a', 'b', 'loss'])
   assert.equal(rows[0].seller_id, 'pending')
-  assert.equal(rows[0].confirmed_profit, null)
+  assert.equal(rows[0].confirmed_profit, 80)
 })
 
 test('salary-only save preserves historical commission and explicit zero', () => {

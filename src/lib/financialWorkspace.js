@@ -21,10 +21,7 @@ export function hasFinancialPending(row) {
 
 export function sortSellerRanking(rows) {
   return rows.filter((row) => row.row_type === 'seller').slice().sort((a, b) => {
-    const aPending = a.confirmed_profit == null || hasFinancialPending(a)
-    const bPending = b.confirmed_profit == null || hasFinancialPending(b)
-    return Number(aPending) - Number(bPending) ||
-      (!aPending ? Number(b.confirmed_profit) - Number(a.confirmed_profit) : 0) ||
+    return Number(b.confirmed_profit) - Number(a.confirmed_profit) ||
       a.seller_name.localeCompare(b.seller_name, 'pt-BR') || String(a.seller_id).localeCompare(String(b.seller_id))
   })
 }

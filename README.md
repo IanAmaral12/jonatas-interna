@@ -141,6 +141,12 @@ Para ativar a integração, cadastre `META_ACCESS_TOKEN_1` e `META_ACCESS_TOKEN_
 
 O script publica a função, executa a primeira sincronização e agenda novas coletas a cada 10 minutos. Tokens nunca devem ser adicionados ao Git ou expostos em variáveis `VITE_*`.
 
+### Resultados financeiros com dados pendentes
+
+A consulta `get_financial_workspace` calcula custo, receita recebida, lucro, margem e breakeven com os valores conhecidos, mesmo quando faltam salários, comissões, quantidades, taxas ou valores recebidos. As pendências permanecem na resposta; nenhum dado ausente é gravado como zero na origem. A margem fica indefinida quando não há receita recebida conhecida.
+
+Dashboard e ranking identificam esses resultados como parciais e mantêm os alertas. Todos os vendedores participam do ranking por lucro calculado. Completar os dados atualiza automaticamente os valores e a classificação.
+
 ### Reconciliação de pagamentos da Skale
 
 Os webhooks não cobrem necessariamente pagamentos manuais e cobranças divididas antigas. Quando a Skale confirma um recebimento que não consta do webhook, consulte `get_pedido_por_id` e `get_pagamentos_do_pedido` no escopo interno. O parser `scripts/skale-payment-evidence.js` valida o pedido, a quantidade de cobranças e a igualdade entre a soma das parcelas pagas, o total confirmado e o valor pago do pedido; descarta dados pessoais da resposta.

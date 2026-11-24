@@ -30,6 +30,9 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
     const workspaceFunction = exclusionSql.match(/create or replace function public\.get_financial_workspace\([\s\S]*?\n\$\$;/)?.[0]
     assert.ok(workspaceFunction)
     await db.exec(workspaceFunction)
+    const partialResults = files.find(file => file.endsWith('_show_partial_financial_results.sql'))
+    assert.ok(partialResults, 'partial financial results migration exists')
+    await db.exec(await readFile(new URL(`../supabase/migrations/${partialResults}`, import.meta.url), 'utf8'))
     await db.exec(`insert into public.sellers values ('${ana}','Ana',true),('${bruno}','Bruno',false),('${carla}','Carla',true);
       insert into public.orders(id,seller_id,data,valor,status_pagamento,product_units)
         select 'a-'||n,'${ana}',case when n=10 then '2026-11-01 02:30+00'::timestamptz else '2026-10-15 12:00+00' end,
@@ -74,7 +77,7 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
       assert.equal(result.seller_settings.find(s=>s.seller_id===ana).month_commission_pct,8)
       assert.deepEqual(result.rates,{production:6.9,shipping:30,skale:0.5})
     })
-    await check('source gaps retain known per-order subtotals and block profit and breakeven',async()=>{
+    await check('source gaps preserve alerts and calculate partial profit and breakeven from known values',async()=>{
       await db.exec("update public.orders set product_units=null where id='a-3'")
       await write('a-3',{transaction:{payment_status:'Parcial',total_price:100000}})
       const result=await workspace(); const row=result.rows[0]
@@ -82,22 +85,36 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
       assert.equal(Number(row.payment_fee_cost),30)
       assert.equal(Number(row.external_commission_cost),20)
       assert.equal(Number(row.known_received_revenue),3000)
-      assert.equal(row.confirmed_revenue,null)
-      assert.equal(row.total_cost,null)
-      assert.equal(row.confirmed_profit,null)
-      assert.equal(row.remaining_to_break_even,null)
+      assert.equal(row.confirmed_revenue,3000)
+      assert.equal(row.total_cost,2727.1)
+      assert.equal(row.confirmed_profit,272.9)
+      assert.equal(row.margin_pct,9.1)
+      assert.equal(row.remaining_to_break_even,0)
+      assert.equal(row.surplus,272.9)
       assert.deepEqual(row.pending,{salary:0,commission:0,units:1,payment_fee:1,received_amount:1,external_commission:1})
-      assert.equal(result.summary.total_cost,null)
-      assert.equal(result.summary.confirmed_profit,null)
+      assert.equal(result.summary.total_cost,2767.1)
+      assert.equal(result.summary.confirmed_profit,232.9)
     })
-    await check('receipt-only gaps keep complete cost but cannot close revenue, profit or breakeven',async()=>{
+    await check('receipt-only gaps keep known revenue and calculate partial profit and breakeven',async()=>{
       await write('a-3',{transaction:{payment_status:'Parcial',acquirer_cost:0,affiliate_earned:0}})
       const row=(await workspace()).rows[0]
       assert.equal(row.pending.received_amount,1)
       assert.equal(row.total_cost,2734)
-      assert.equal(row.confirmed_revenue,null)
-      assert.equal(row.confirmed_profit,null)
-      assert.equal(row.remaining_to_break_even,null)
+      assert.equal(row.confirmed_revenue,3000)
+      assert.equal(row.confirmed_profit,266)
+      assert.equal(row.remaining_to_break_even,0)
+    })
+    await check('absent received values show a numeric loss without inventing paid revenue',async()=>{
+      await db.exec('update public.order_financial_snapshots set received_amount=null,received_payment_status=null')
+      const result=await workspace(); const row=result.rows[0]
+      assert.equal(row.pending.received_amount,2)
+      assert.equal(row.confirmed_revenue,0)
+      assert.equal(row.confirmed_profit,-2734)
+      assert.equal(row.remaining_to_break_even,2734)
+      assert.equal(row.surplus,0)
+      assert.equal(row.margin_pct,null)
+      assert.equal(result.summary.confirmed_profit,-2774)
+      assert.equal(result.summary.remaining_to_break_even,2774)
     })
     await check('traffic conversion precision closes each seller and the consolidated total in cents',async()=>{
       await db.exec("update public.meta_campaign_hourly_insights set spend_brl=500.005 where campaign_id='seller'")
@@ -115,7 +132,7 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
       assert.equal(row.pending.payment_fee,1)
       assert.equal(row.payment_fee_cost,30)
       assert.equal(row.confirmed_revenue,3000)
-      assert.equal(row.total_cost,null)
+      assert.equal(row.total_cost,2734)
     })
     await check('versioned payment and shipping beat regressed fields, cancellation is exact and Skale counts all',async()=>{
       await write('a-3',{skaletracking:{status_entrega:'Devolvido'}})
@@ -165,10 +182,14 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
     await check('missing seller settings are explicit but zero salary and commission are valid',async()=>{
       await db.exec(`update public.orders set seller_id='${carla}' where id='a-10'`)
       let row=(await workspace()).rows.find(r=>r.seller_id===carla)
-      assert.equal(row.pending.salary,1); assert.equal(row.pending.commission,1); assert.equal(row.total_cost,null)
+      assert.equal(row.pending.salary,1); assert.equal(row.pending.commission,1)
+      assert.equal(row.total_cost,37.4)
+      assert.equal(row.confirmed_profit,-37.4)
+      assert.equal(row.remaining_to_break_even,37.4)
       await asRole('authenticated',()=>db.exec(`insert into public.seller_financial_settings values ('${carla}','2026-10-01',0,0)`))
       row=(await workspace()).rows.find(r=>r.seller_id===carla)
       assert.equal(row.total_cost,37.4)
+      assert.equal(row.pending.salary,0); assert.equal(row.pending.commission,0)
     })
     await check('largest remainder tax allocation and unassigned traffic reconcile without double charge',async()=>{
       await db.exec(`update public.financial_monthly_taxes set tax_paid=100.01;

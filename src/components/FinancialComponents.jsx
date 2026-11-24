@@ -1,5 +1,5 @@
 import { calculateBreakEvenBars } from '../lib/financialDreBars'
-import { costFields, costLabel, formatMoney, formatPercent } from '../lib/financialWorkspace'
+import { costFields, costLabel, formatMoney, formatPercent, hasFinancialPending } from '../lib/financialWorkspace'
 
 const pendingLabels = {
   salary: ['vendedor sem salário lançado', 'vendedores sem salário lançado'], commission: ['vendedor sem comissão configurada', 'vendedores sem comissão configurada'],
@@ -13,7 +13,7 @@ export function PendingReasons({ row, onConfigure, compact = false }) {
   const editable = Number(row.pending.salary || 0) + Number(row.pending.commission || 0) > 0
   const source = ['units', 'payment_fee', 'received_amount', 'external_commission'].some((key) => Number(row.pending[key] || 0) > 0)
   return <div className={`fw-pending${compact ? ' compact' : ''}`}>
-    {!compact && <strong>Faltam dados para fechar o resultado</strong>}
+    {!compact && <><strong>Resultado parcial · faltam dados</strong><p>O cálculo considera os valores conhecidos e será atualizado conforme os dados forem completados.</p></>}
     <ul>{entries.map(([key, count]) => <li key={key}>{count} {pendingLabels[key]?.[Number(count) === 1 ? 0 : 1] || key}</li>)}</ul>
     {source && !compact && <p>Dados ausentes serão atualizados ao receber as informações dos pedidos e pagamentos.</p>}
     {editable && onConfigure && <button type="button" className="fw-link" onClick={onConfigure}>Configurar remuneração{row.seller_id ? ` de ${row.seller_name}` : ''}</button>}
@@ -21,45 +21,48 @@ export function PendingReasons({ row, onConfigure, compact = false }) {
 }
 
 export function FinancialBars({ row }) {
-  const complete = row.total_cost != null && row.confirmed_revenue != null
-  const cost = Number(complete ? row.total_cost : row.known_cost)
-  const revenue = Number(complete ? row.confirmed_revenue : row.known_received_revenue)
+  const partial = hasFinancialPending(row)
+  const cost = Number(row.total_cost ?? row.known_cost)
+  const revenue = Number(row.confirmed_revenue ?? row.known_received_revenue)
   const bars = calculateBreakEvenBars(cost, revenue)
   const scale = Math.max(cost, revenue, 1)
   return <div className="fw-bars" aria-label="Comparação de custo e recebimento na mesma escala">
     {[
-      [complete ? 'Custo total' : 'Custo conhecido', cost, bars.costPercent, 'cost'],
-      [complete ? 'Recebido confirmado' : 'Recebido conhecido', revenue, bars.paidPercent, 'received'],
+      [partial ? 'Custo conhecido' : 'Custo total', cost, bars.costPercent, 'cost'],
+      [partial ? 'Recebido conhecido' : 'Recebido confirmado', revenue, bars.paidPercent, 'received'],
     ].map(([label, value, width, className]) => <div key={className}>
       <div className="fw-bar-label"><span>{label}</span><strong>{formatMoney(value)}</strong></div>
       <div className="fw-bar-track" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={scale} aria-valuenow={value}>
         <span className={className} style={{ width: `${width || 0}%` }} />
       </div>
     </div>)}
-    {complete ? <p className={`fw-breakeven ${bars.remaining > 0 ? 'negative' : 'positive'}`}>
+    <p className={`fw-breakeven ${bars.remaining > 0 ? 'negative' : 'positive'}`}>
       {cost > 0 && <span>{formatPercent(revenue / cost * 100)} do custo coberto · </span>}
       {bars.remaining > 0 ? `Faltam ${formatMoney(bars.remaining)} para se pagar`
         : bars.surplus > 0 ? `Excedente de ${formatMoney(bars.surplus)}` : 'Custo coberto'}
-    </p> : null}
+      {partial && <span> · considerando os valores conhecidos</span>}
+    </p>
   </div>
 }
 
 export function CostDetails({ row }) {
   return <details className="fw-details"><summary>Composição dos custos</summary><dl>
     {costFields.map(([key, label]) => <div key={key}><dt>{costLabel(row, key, label)}{key === 'commission_cost' ? ` (${formatPercent(row.commission_pct)})` : ''}</dt><dd>{formatMoney(row[key])}</dd></div>)}
-    <div className="fw-total"><dt>{row.total_cost == null ? 'Subtotal de custos conhecidos' : 'Custo total'}</dt><dd>{formatMoney(row.total_cost ?? row.known_cost)}</dd></div>
+    <div className="fw-total"><dt>{hasFinancialPending(row) ? 'Total de custos conhecidos' : 'Custo total'}</dt><dd>{formatMoney(row.total_cost ?? row.known_cost)}</dd></div>
   </dl></details>
 }
 
 export function FinancialMetrics({ row, dashboard = false }) {
-  const result = [['Lucro confirmado', formatMoney(row.confirmed_profit)], ['Margem', formatPercent(row.margin_pct)]]
+  const partial = hasFinancialPending(row)
+  const profitLabel = partial ? 'Lucro parcial' : 'Lucro confirmado'
+  const result = [[profitLabel, formatMoney(row.confirmed_profit)], [partial ? 'Margem parcial' : 'Margem', formatPercent(row.margin_pct)]]
   const metrics = dashboard ? [
       ['Receita agendada', formatMoney(row.scheduled_revenue)],
-      [row.confirmed_revenue == null ? 'Recebido conhecido' : 'Recebido confirmado', formatMoney(row.known_received_revenue)],
-      [row.total_cost == null ? 'Custos conhecidos · subtotal' : 'Custo total', formatMoney(row.total_cost ?? row.known_cost)],
+      [partial ? 'Recebido conhecido' : 'Recebido confirmado', formatMoney(row.known_received_revenue)],
+      [partial ? 'Custos conhecidos' : 'Custo total', formatMoney(row.total_cost ?? row.known_cost)],
       ...result,
     ] : [...result, ['Receita agendada', formatMoney(row.scheduled_revenue)]]
   return <div className={`fw-metrics${dashboard ? ' fw-dashboard-metrics' : ''}`}>
-    {metrics.map(([label, value]) => <div key={label}><span>{label}</span><strong className={label === 'Lucro confirmado' && row.confirmed_profit != null ? Number(row.confirmed_profit) < 0 ? 'fw-profit-negative' : 'fw-profit-positive' : undefined}>{value}</strong></div>)}
+    {metrics.map(([label, value]) => <div key={label}><span>{label}</span><strong className={label === profitLabel && row.confirmed_profit != null ? Number(row.confirmed_profit) < 0 ? 'fw-profit-negative' : 'fw-profit-positive' : undefined}>{value}</strong></div>)}
   </div>
 }
