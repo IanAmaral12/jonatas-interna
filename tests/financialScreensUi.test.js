@@ -30,5 +30,15 @@ test('financial dashboard, costs and cash tab render categories, commission type
     assert.match(workspace, /<h1 id="fw-title">Fluxo de caixa<\/h1>/)
     assert.match(workspace, /cash-flow-slot/)
     assert.doesNotMatch(workspace, /Mês de referência/)
+    const seller = { row_type: 'seller', seller_id: 's', seller_name: 'Ana', scheduled_revenue: 1000, confirmed_revenue: 300,
+      known_received_revenue: 300, total_cost: 500, known_cost: 500, confirmed_profit: -200, margin_pct: -66.67,
+      delivered_count: 8, paid_count: 5, delivered_paid_count: 4, pending: {} }
+    const ranking = renderToStaticMarkup(createElement(await load('/src/components/SellerFinancialRankingPage.jsx'),
+      { data: { rows: [seller], summary: { ...seller, row_type: 'summary', seller_name: 'Consolidado', confirmed_profit: 150 } }, onConfigure() {} }))
+    assert.match(ranking, /Resultado global[\s\S]*Lucro[\s\S]*150,00/)
+    assert.match(ranking, /Prejuízo[\s\S]*200,00/)
+    assert.match(ranking, /Faturamento agendado/)
+    assert.match(ranking, /fw-single-bar/)
+    assert.match(ranking, /Entregues[\s\S]*8[\s\S]*Pagos[\s\S]*5[\s\S]*Entregues já pagos[\s\S]*4[\s\S]*50%/)
   } finally { await server.close() }
 })

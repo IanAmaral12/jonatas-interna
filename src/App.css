@@ -563,6 +563,31 @@ form { display: grid; gap: 18px; }
 .fw-badge.evolving { color: var(--orange-dark); background: var(--orange-soft); }
 .fw-profit-positive { color: var(--cash-positive); }
 .fw-profit-negative { color: var(--error-text); }
+.fw-seller-result { display: grid; grid-template-columns: minmax(190px, .55fr) minmax(0, 1.6fr); gap: 26px; align-items: center; margin-bottom: 20px; }
+.fw-result-highlight { display: grid; gap: 4px; padding: 17px 19px; border: 1px solid var(--cash-positive-border); border-radius: 13px; background: var(--cash-positive-bg); }
+.fw-result-highlight.negative { border-color: var(--error-border); background: var(--error-bg); }
+.fw-result-highlight > span { color: var(--cash-positive); font-size: 12px; font-weight: 800; letter-spacing: .5px; text-transform: uppercase; }
+.fw-result-highlight.negative > span, .fw-result-highlight.negative > strong { color: var(--error-text); }
+.fw-result-highlight > strong { color: var(--cash-positive); font: 800 clamp(24px, 2.6vw, 32px)/1.1 'Manrope', sans-serif; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fw-result-highlight > small { color: var(--muted); font-size: 11px; }
+.fw-single-bar { position: relative; height: 18px; border-radius: 99px; background: var(--surface-hover); box-shadow: inset 0 0 0 1px var(--border); }
+.fw-single-bar > span { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--orange); }
+.fw-single-bar > span.covered { background: var(--cash-positive); }
+.fw-cost-marker { position: absolute; top: -5px; bottom: -5px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--error-text); }
+.fw-bar-legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0; }
+.fw-bar-legend > div { display: grid; gap: 3px; }
+.fw-bar-legend dt { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 11px; }
+.fw-bar-legend dd { margin: 0 0 0 16px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.fw-bar-legend b { width: 10px; height: 10px; border-radius: 3px; }
+.fw-bar-legend b.received { background: var(--cash-positive); }
+.fw-bar-legend b.cost { width: 3px; height: 12px; border-radius: 2px; background: var(--error-text); }
+.fw-bar-legend b.scheduled { background: var(--surface-hover); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.fw-delivery { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0 0 4px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-subtle); }
+.fw-delivery dt { color: var(--muted); font-size: 11px; }
+.fw-delivery dd { margin: 5px 0 0; font: 750 18px/1.2 'Manrope', sans-serif; font-variant-numeric: tabular-nums; }
+.fw-delivery dd small { color: var(--muted); font: 600 12px/1 'DM Sans', sans-serif; }
+.fw-global-card { border-color: var(--border-strong); }
+@media (max-width: 900px) { .fw-seller-result { grid-template-columns: minmax(0, 1fr); gap: 16px; } .fw-delivery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .fw-details { margin-top: 20px; font-size: 12px; }
 .fw-details summary { width: fit-content; min-height: 44px; padding: 12px 0; color: var(--orange-dark); font-weight: 700; cursor: pointer; }
 .fw-details dl, .fw-composition { display: grid; gap: 11px; margin: 16px 0 0; }

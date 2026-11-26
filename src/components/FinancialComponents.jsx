@@ -20,22 +20,49 @@ export function PendingReasons({ row, onConfigure, compact = false }) {
   </div>
 }
 
+export function ResultHighlight({ row, title }) {
+  const partial = hasFinancialPending(row)
+  const profit = Number(row.confirmed_profit)
+  const loss = row.confirmed_profit != null && profit < 0
+  return <div className={`fw-result-highlight ${loss ? 'negative' : 'positive'}`}>
+    {title && <small>{title}</small>}
+    <span>{loss ? 'Prejuízo' : 'Lucro'}{partial ? ' parcial' : ''}</span>
+    <strong>{row.confirmed_profit == null ? formatMoney(null) : formatMoney(Math.abs(profit))}</strong>
+    <small>Margem {formatPercent(row.margin_pct)}</small>
+  </div>
+}
+
+export function DeliveredPaid({ row }) {
+  const delivered = Number(row.delivered_count || 0)
+  const deliveredPaid = Number(row.delivered_paid_count || 0)
+  return <dl className="fw-delivery" aria-label="Entregues e pagos">
+    <div><dt>Entregues</dt><dd>{delivered}</dd></div>
+    <div><dt>Pagos</dt><dd>{Number(row.paid_count || 0)}</dd></div>
+    <div><dt>Entregues já pagos</dt><dd>{deliveredPaid}{delivered > 0 && <small> · {formatPercent(Math.round(deliveredPaid / delivered * 100))}</small>}</dd></div>
+    <div><dt>Entregues sem pagamento</dt><dd className={delivered > deliveredPaid ? 'fw-profit-negative' : undefined}>{delivered - deliveredPaid}</dd></div>
+  </dl>
+}
+
 export function FinancialBars({ row }) {
   const partial = hasFinancialPending(row)
-  const cost = Number(row.total_cost ?? row.known_cost)
-  const revenue = Number(row.confirmed_revenue ?? row.known_received_revenue)
+  const cost = Number(row.total_cost ?? row.known_cost) || 0
+  const revenue = Number(row.confirmed_revenue ?? row.known_received_revenue) || 0
+  const scheduled = Number(row.scheduled_revenue) || 0
   const bars = calculateBreakEvenBars(cost, revenue)
-  const scale = Math.max(cost, revenue, 1)
-  return <div className="fw-bars" aria-label="Comparação de custo e recebimento na mesma escala">
-    {[
-      [partial ? 'Custo conhecido' : 'Custo total', cost, bars.costPercent, 'cost'],
-      [partial ? 'Recebido conhecido' : 'Recebido confirmado', revenue, bars.paidPercent, 'received'],
-    ].map(([label, value, width, className]) => <div key={className}>
-      <div className="fw-bar-label"><span>{label}</span><strong>{formatMoney(value)}</strong></div>
-      <div className="fw-bar-track" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={scale} aria-valuenow={value}>
-        <span className={className} style={{ width: `${width || 0}%` }} />
-      </div>
-    </div>)}
+  // One scale for the three values: scheduled revenue, unless costs or receipts exceed it.
+  const scale = Math.max(scheduled, cost, revenue, 1)
+  const position = (value) => `${Math.min(value / scale * 100, 100)}%`
+  const legend = [
+    [partial ? 'Recebido conhecido' : 'Recebido confirmado', revenue, 'received'],
+    [partial ? 'Custo conhecido' : 'Custo total', cost, 'cost'],
+    ['Faturamento agendado', scheduled, 'scheduled'],
+  ]
+  return <div className="fw-bars">
+    <div className="fw-single-bar" role="img" aria-label={legend.map(([label, value]) => `${label}: ${formatMoney(value)}`).join('; ')}>
+      <span className={`received${revenue >= cost ? ' covered' : ''}`} style={{ width: position(revenue) }} />
+      <i className="fw-cost-marker" style={{ left: position(cost) }} />
+    </div>
+    <dl className="fw-bar-legend">{legend.map(([label, value, className]) => <div key={className}><dt><b className={className} aria-hidden="true" />{label}</dt><dd>{formatMoney(value)}</dd></div>)}</dl>
     <p className={`fw-breakeven ${bars.remaining > 0 ? 'negative' : 'positive'}`}>
       {cost > 0 && <span>{formatPercent(revenue / cost * 100)} do custo coberto · </span>}
       {bars.remaining > 0 ? `Faltam ${formatMoney(bars.remaining)} para se pagar`

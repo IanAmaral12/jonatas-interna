@@ -145,7 +145,7 @@ O script publica a função, executa a primeira sincronização e agenda novas c
 
 A consulta `get_financial_workspace` calcula custo, receita recebida, lucro, margem e breakeven com os valores conhecidos, mesmo quando faltam salários, comissões, quantidades, taxas ou valores recebidos. As pendências permanecem na resposta; nenhum dado ausente é gravado como zero na origem. A margem fica indefinida quando não há receita recebida conhecida.
 
-Dashboard e ranking identificam esses resultados como parciais e mantêm os alertas. Todos os vendedores participam do ranking por lucro calculado. Completar os dados atualiza automaticamente os valores e a classificação.
+Dashboard e ranking identificam esses resultados como parciais e mantêm os alertas. O ranking mostra o resultado global e, por vendedor, lucro ou prejuízo em destaque, uma barra única na escala do faturamento agendado (recebido preenchido e marcador do custo) e a contagem de pedidos entregues, pagos e entregues já pagos (`delivered_count`, `paid_count`, `delivered_paid_count`). Todos os vendedores participam do ranking por lucro calculado. Completar os dados atualiza automaticamente os valores e a classificação.
 
 Na plataforma `Pagamento Interno`, taxa de pagamento ausente é considerada R$ 0 no cálculo financeiro e não gera alerta de taxa pendente. A regra usa a plataforma vigente do retrato financeiro, vale para pedidos históricos e futuros e preserva os dados de origem. Taxas explícitas continuam contabilizadas, inclusive em pedidos mistos com pagamentos por outros gateways. A cobrança de R$ 0,50 da Skale e alertas de outros dados ausentes permanecem independentes.
 

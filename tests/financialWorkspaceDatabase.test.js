@@ -39,6 +39,9 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
     const costTypes = files.find(file => file.endsWith('_cost_types_categories_recurring.sql'))
     assert.ok(costTypes, 'cost types migration exists')
     await db.exec(await readFile(new URL(`../supabase/migrations/${costTypes}`, import.meta.url), 'utf8'))
+    const rankingCounts = files.find(file => file.endsWith('_ranking_delivered_paid_counts.sql'))
+    assert.ok(rankingCounts, 'ranking counts migration exists')
+    await db.exec(await readFile(new URL(`../supabase/migrations/${rankingCounts}`, import.meta.url), 'utf8'))
     await db.exec(`insert into public.sellers values ('${ana}','Ana',true),('${bruno}','Bruno',false),('${carla}','Carla',true);
       insert into public.orders(id,seller_id,data,valor,status_pagamento,product_units)
         select 'a-'||n,'${ana}',case when n=10 then '2026-11-01 02:30+00'::timestamptz else '2026-10-15 12:00+00' end,
@@ -264,6 +267,13 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
       const row=(await workspace()).rows.find(r=>r.seller_id===bruno)
       assert.equal(row.pending.commission,0)
       assert.equal(row.total_cost,0.5)
+    })
+    await check('ranking counts delivered orders, paid orders and delivered orders already paid',async()=>{
+      await db.exec("update public.orders set status_rastreio='Entregue' where id in ('a-1','a-3','a-4'); update public.orders set cancelado=true where id='a-4'")
+      await write('a-5',{skaletracking:{status_entrega:' ENTREGUE '}})
+      const result=await workspace(); const row=result.rows[0]
+      assert.deepEqual([row.delivered_count,row.paid_count,row.delivered_paid_count],[3,2,1])
+      assert.deepEqual([result.summary.delivered_count,result.summary.paid_count,result.summary.delivered_paid_count],[3,2,1])
     })
     await check('commission types use scheduled, received, paid count or shipped count bases',async()=>{
       const commission=async(type,value)=>{
