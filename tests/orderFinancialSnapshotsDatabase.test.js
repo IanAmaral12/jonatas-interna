@@ -6,6 +6,7 @@ import { stripTypeScriptTypes } from 'node:module'
 import { runInNewContext } from 'node:vm'
 import { randomUUID } from 'node:crypto'
 import { sumProductUnits } from '../supabase/functions/orders-worker/order-units.js'
+import { cancellationFromStatuses } from '../supabase/functions/orders-worker/order-cancellation.js'
 
 test('financial snapshots parse cents, merge versions, backfill and restrict access', async (t) => {
   const db = new PGlite()
@@ -155,7 +156,7 @@ test('worker snapshots created, duplicate and updated orders before archive; fai
         update:()=>({eq:()=>({select:async()=>({data:[{id:'one'}]})})})}),
     }
     runInNewContext(executable,{Deno:{env:{get:()=> 'synthetic-test-value'},serve:fn=>{handler=fn}},
-      createClient:()=>client,sumProductUnits,TextEncoder,Response,crypto:{randomUUID},console:{error:()=>{}}})
+      createClient:()=>client,sumProductUnits,cancellationFromStatuses,TextEncoder,Response,crypto:{randomUUID},console:{error:()=>{}}})
     const response=await handler(new Request('https://worker.invalid',{method:'POST',headers:{'x-worker-secret':'synthetic-test-value'},body:'{}'}))
     const writer=calls.find(c=>c.name==='record_order_financial_snapshot')
     assert.ok(writer,`${scenario}: snapshot writer called`)

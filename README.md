@@ -75,7 +75,7 @@ O Supabase Cron invoca o worker automaticamente uma vez por minuto. Um lease no 
 | `status_rastreio` | `skaletracking.status_entrega` |
 | `status_pagamento` | `skale.status_pagamento`, `skaletracking.status_pagamento` ou `transaction.payment_status` |
 
-O campo `orders.data` é um `timestamptz`. Datas sem offset explícito enviadas pelo Skale são interpretadas em `America/Sao_Paulo`. O campo `orders.cancelado` é atualizado quando algum status de pagamento contém `cancelado`; pedidos cancelados ficam fora do denominador do CPA.
+O campo `orders.data` é um `timestamptz`. Datas sem offset explícito enviadas pelo Skale são interpretadas em `America/Sao_Paulo`. O campo `orders.cancelado` é atualizado quando algum status de pagamento ou o status de rastreio (`skaletracking.status_entrega`) contém `cancelado`; pedidos cancelados ficam fora do denominador do CPA.
 
 ### Meta Ads e CPA
 

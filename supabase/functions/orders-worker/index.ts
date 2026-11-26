@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { sumProductUnits } from "./order-units.js";
+import { cancellationFromStatuses } from "./order-cancellation.js";
 
 type JsonObject = Record<string, unknown>;
 
@@ -126,8 +127,7 @@ function mapOrder(payload: JsonObject): { event: string | null; order: OrderReco
     getPath(payload, ["transaction", "payment_status"]),
   );
   const paymentStatus = skalePaymentStatus || transactionPaymentStatus;
-  const cancellationStatuses = [skalePaymentStatus, transactionPaymentStatus]
-    .filter((status): status is string => status !== null);
+  const trackingStatus = cleanString(getPath(payload, ["skaletracking", "status_entrega"]));
 
   return {
     event,
@@ -146,11 +146,9 @@ function mapOrder(payload: JsonObject): { event: string | null; order: OrderReco
         dateOnly(getPath(payload, ["transaction", "paid_at_data"])) ||
         dateOnly(getPath(payload, ["transaction", "paid_at"])),
       codigo_rastreio: cleanString(getPath(payload, ["shipping", "tracking_code"])),
-      status_rastreio: cleanString(getPath(payload, ["skaletracking", "status_entrega"])),
+      status_rastreio: trackingStatus,
       status_pagamento: paymentStatus,
-      cancelado: cancellationStatuses.length > 0
-        ? cancellationStatuses.some((status) => status.toLocaleLowerCase("pt-BR").includes("cancelado"))
-        : null,
+      cancelado: cancellationFromStatuses([skalePaymentStatus, transactionPaymentStatus, trackingStatus]),
     },
   };
 }
