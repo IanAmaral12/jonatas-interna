@@ -50,6 +50,7 @@ import {
 import { Line } from 'react-chartjs-2'
 import { supabase, supabaseConfigError } from './lib/supabase'
 import { sortCommercialRows } from './lib/commercialSort'
+import { summarizeCashFlow } from './lib/cashFlow'
 import './App.css'
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Tooltip, Legend)
@@ -1337,6 +1338,10 @@ function CashFlowPage() {
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false)
   const [entryToDelete, setEntryToDelete] = useState(null)
   const [message, setMessage] = useState(null)
+  const [cashData, setCashData] = useState(null)
+  const [cashLoading, setCashLoading] = useState(true)
+  const [cashError, setCashError] = useState('')
+  const [seller, setSeller] = useState('all')
 
   useEffect(() => {
     let active = true
@@ -1364,6 +1369,17 @@ function CashFlowPage() {
     loadEntries()
     return () => { active = false }
   }, [])
+
+  useEffect(() => {
+    let active = true
+    supabase.rpc('get_cash_flow', { p_start: appliedDateFilters.start, p_end: appliedDateFilters.end }).then(({ data, error }) => {
+      if (!active) return
+      setCashError(error || !data ? 'Não foi possível carregar pagamentos e custos gerados. Tente novamente.' : '')
+      if (!error && data) setCashData(data)
+      setCashLoading(false)
+    })
+    return () => { active = false }
+  }, [appliedDateFilters])
 
   useEffect(() => {
     if (!isEntryModalOpen && !entryToDelete) return undefined
@@ -1404,7 +1420,9 @@ function CashFlowPage() {
     if (entry.entry_type === 'saida') result.expenses += entry.amount
     return result
   }, { income: 0, expenses: 0 })
-  const balance = totals.income - totals.expenses
+  const cash = summarizeCashFlow(cashData, seller)
+  // Manual entries have no seller, so the balance always uses every received payment.
+  const balance = summarizeCashFlow(cashData, 'all').received + totals.income - totals.expenses
   const hasSecondaryFilters = Object.values(filters).some((value) => value !== 'all')
   const activeFilterCount = Object.values(filters).filter((value) => value !== 'all').length
 
@@ -1418,7 +1436,9 @@ function CashFlowPage() {
   }
 
   const applyCashDateFilters = () => {
-    if (dateFilters.start <= dateFilters.end) setAppliedDateFilters({ ...dateFilters })
+    if (dateFilters.start > dateFilters.end) return
+    setCashLoading(true)
+    setAppliedDateFilters({ ...dateFilters })
   }
 
   const toggleFilterMenu = () => {
@@ -1487,34 +1507,88 @@ function CashFlowPage() {
   }
 
   return (
-    <section id="cash-flow" className="dashboard-content cash-flow-page" aria-label="Fluxo de caixa">
-      <header className="dashboard-header">
-        <div>
-          <span className="dashboard-eyebrow">Controle financeiro</span>
-          <h1>Fluxo de caixa</h1>
-          <p>Registre entradas e saídas manuais e acompanhe o balanço da operação.</p>
+    <div id="cash-flow" className="cash-flow-page">
+      <div className="cash-toolbar">
+        <div className="cash-filter-field">
+          <label htmlFor="cash-seller">Vendedor dos pedidos</label>
+          <select id="cash-seller" value={seller} onChange={(event) => setSeller(event.target.value)}>
+            <option value="all">Todos</option>
+            {cash.sellers.map(([key, name]) => <option key={key} value={key}>{name}</option>)}
+          </select>
         </div>
         <DateRangeFilter
           filters={dateFilters}
           appliedFilters={appliedDateFilters}
           setFilters={setDateFilters}
           onApply={applyCashDateFilters}
-          loading={loading}
+          loading={loading || cashLoading}
         />
-      </header>
+      </div>
 
       <div className="cash-summary-grid">
         <article className="cash-summary-card income">
+          <span><CircleDollarSign size={20} /></span>
+          <div><small>Recebido de pedidos{seller !== 'all' ? ' · vendedor filtrado' : ''}</small><strong>{money(cash.received, 'BRL')}</strong></div>
+        </article>
+        <article className="cash-summary-card income">
           <span><ArrowUpRight size={20} /></span>
-          <div><small>Entradas no período</small><strong>{money(totals.income, 'BRL')}</strong></div>
+          <div><small>Entradas manuais</small><strong>{money(totals.income, 'BRL')}</strong></div>
         </article>
         <article className="cash-summary-card expense">
           <span><ArrowDownLeft size={20} /></span>
-          <div><small>Saídas no período</small><strong>{money(totals.expenses, 'BRL')}</strong></div>
+          <div><small>Saídas manuais</small><strong>{money(totals.expenses, 'BRL')}</strong></div>
         </article>
         <article className={`cash-summary-card balance${balance < 0 ? ' negative' : ''}`}>
           <span><WalletCards size={20} /></span>
           <div><small>Saldo do período</small><strong>{money(balance, 'BRL')}</strong></div>
+        </article>
+      </div>
+
+      {cashError && <div className="cash-flow-message error" role="alert">{cashError}{cashData ? ' Os valores exibidos são da última consulta concluída.' : ''}</div>}
+
+      <div className="cash-integrated-grid">
+        <article className="cash-history-panel" aria-labelledby="cash-payments-title">
+          <div className="cash-panel-heading"><div><span>Recebimentos</span><h2 id="cash-payments-title">Pagamentos recebidos</h2></div></div>
+          <div className="cash-results-summary">
+            <span>{cash.days.reduce((count, day) => count + day.payments.length, 0)} pagamentos · {money(cash.received, 'BRL')}</span>
+            <b>{periodLabel(appliedDateFilters)}</b>
+          </div>
+          <div className="cash-history-scroll">
+            {cashLoading && !cashData ? (
+              <div className="cash-empty-state"><LoaderCircle className="spin" size={24} />Carregando pagamentos...</div>
+            ) : cash.days.length === 0 ? (
+              <div className="cash-empty-state"><CircleDollarSign size={30} /><strong>Nenhum pagamento recebido</strong><span>Ajuste o período ou o vendedor para consultar outros pagamentos.</span></div>
+            ) : cash.days.map((day) => (
+              <section className="cash-day" key={day.date} aria-label={`Pagamentos de ${day.date.split('-').reverse().join('/')}`}>
+                <header className="cash-day-header">
+                  <strong>{weekdayFormatter.format(dateFromValue(day.date))}, {day.date.split('-').reverse().join('/')}</strong>
+                  <span>{day.payments.length} {day.payments.length === 1 ? 'pagamento' : 'pagamentos'} · <b>{money(day.total, 'BRL')}</b></span>
+                </header>
+                <div className="cash-history-table">
+                  {day.payments.map((payment) => (
+                    <div className="cash-history-row cash-payment-row" key={payment.order_id}>
+                      <div data-label="Pedido">{payment.order_id}</div>
+                      <div data-label="Cliente" className="cash-description-cell">{payment.customer_name || '—'}</div>
+                      <div data-label="Vendedor">{payment.seller_name}</div>
+                      <div data-label="Pagamento">{payment.payment_status || '—'}{payment.platform ? ` · ${payment.platform}` : ''}{payment.estimated_date && <small className="cash-estimated" title="Pedido sem data de pagamento; usado o horário em que o recebimento foi registrado."> · data estimada</small>}</div>
+                      <div data-label="Valor" className="cash-value entrada">+ {money(payment.amount, 'BRL')}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </article>
+
+        <article className="cash-history-panel cash-costs-panel" aria-labelledby="cash-costs-title">
+          <div className="cash-panel-heading"><div><span>Pedidos criados no período</span><h2 id="cash-costs-title">Custos gerados</h2></div></div>
+          <dl className="cash-cost-list">
+            <div><dt>Fretes</dt><dd><strong>{money(cash.costs.shipping, 'BRL')}</strong><small>{cash.costs.freight_orders} pedidos × {money(cashData?.rates.shipping ?? 30, 'BRL')}</small></dd></div>
+            <div><dt>Potes</dt><dd><strong>{money(cash.costs.production, 'BRL')}</strong><small>{cash.costs.units} unidades × {money(cashData?.rates.production ?? 6.9, 'BRL')}</small></dd></div>
+            <div className="cash-cost-total"><dt>Total gerado</dt><dd><strong>{money(cash.costs.total, 'BRL')}</strong></dd></div>
+          </dl>
+          {cash.costs.missing_units > 0 && <p className="cash-cost-note">{cash.costs.missing_units} {cash.costs.missing_units === 1 ? 'pedido sem quantidade de potes não entrou' : 'pedidos sem quantidade de potes não entraram'} na conta.</p>}
+          <p className="cash-cost-note">Mesma regra do DRE: pedidos cancelados não geram custo e devolvidos não geram potes.</p>
         </article>
       </div>
 
@@ -1712,7 +1786,7 @@ function CashFlowPage() {
           </div>
         </div>
       )}
-    </section>
+    </div>
   )
 }
 
@@ -1738,16 +1812,16 @@ function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
             <span>Dashboard</span>
           </button>
           <button
-            className={`sidebar-nav-item${activePage.startsWith('financial-') ? ' active' : ''}`}
+            className={`sidebar-nav-item${activePage.startsWith('financial-') && activePage !== 'financial-cash' ? ' active' : ''}`}
             type="button"
-            aria-current={activePage.startsWith('financial-') ? 'page' : undefined}
-            onClick={() => { if (!activePage.startsWith('financial-')) setActivePage('financial-dashboard') }}
+            aria-current={activePage.startsWith('financial-') && activePage !== 'financial-cash' ? 'page' : undefined}
+            onClick={() => { if (!activePage.startsWith('financial-') || activePage === 'financial-cash') setActivePage('financial-dashboard') }}
           ><ReceiptText size={19} /><span>Financeiro</span></button>
           <button
-            className={`sidebar-nav-item${activePage === 'cash-flow' ? ' active' : ''}`}
+            className={`sidebar-nav-item${activePage === 'financial-cash' ? ' active' : ''}`}
             type="button"
-            aria-current={activePage === 'cash-flow' ? 'page' : undefined}
-            onClick={() => setActivePage('cash-flow')}
+            aria-current={activePage === 'financial-cash' ? 'page' : undefined}
+            onClick={() => setActivePage('financial-cash')}
           >
             <WalletCards size={19} />
             <span>Fluxo de caixa</span>
@@ -1776,8 +1850,8 @@ function AuthenticatedView({ theme, onToggleTheme, onSignOut, loading }) {
       </aside>
 
       {activePage === 'dashboard' ? <Dashboard theme={theme} />
-        : activePage.startsWith('financial-') ? <FinancialWorkspace view={activePage.slice('financial-'.length)} onViewChange={(view) => setActivePage(`financial-${view}`)} />
-          : activePage === 'cash-flow' ? <CashFlowPage /> : <PreAppointmentsPage />}
+        : activePage.startsWith('financial-') ? <FinancialWorkspace view={activePage.slice('financial-'.length)} onViewChange={(view) => setActivePage(`financial-${view}`)} cashFlow={<CashFlowPage />} />
+          : <PreAppointmentsPage />}
     </main>
   )
 }

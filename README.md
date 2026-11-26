@@ -165,7 +165,14 @@ O merge financeiro impede que replays antigos ou um `total_price` posterior subs
 
 ### Fluxo de caixa
 
-A página **Fluxo de caixa** permite que usuários autenticados cadastrem
+O **Fluxo de caixa** é uma aba do Financeiro. A RPC `get_cash_flow(p_start, p_end)`
+(até 366 dias) lista os pagamentos recebidos pelo dia de pagamento (`orders.data_pagamento`;
+sem essa data, usa o horário de registro do valor recebido em Brasília e marca a data como
+estimada) e os custos de frete e potes gerados pelos pedidos criados no período, com as mesmas
+regras do DRE. Pagamentos e custos podem ser filtrados por vendedor; o saldo soma todos os
+pagamentos recebidos às entradas manuais e subtrai as saídas manuais.
+
+A aba também permite que usuários autenticados cadastrem
 manualmente entradas e saídas em BRL. Cada lançamento registra responsável, valor,
 descrição, tipo, data automática e o usuário do Supabase responsável pela criação.
 

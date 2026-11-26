@@ -187,7 +187,7 @@ form { display: grid; gap: 18px; }
 .seller-performance-row:not(.seller-performance-head):hover { border-color: rgba(255,122,26,.3); background: var(--surface-hover); }
 .seller-performance-loading { min-height: 150px; display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--muted); border: 1px dashed var(--border); border-radius: 12px; background: var(--surface-subtle); font-size: 11px; }
 .seller-performance-loading svg { color: var(--orange-dark); }
-.cash-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.cash-summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
 .cash-summary-card { min-width: 0; min-height: 116px; display: flex; align-items: center; gap: 15px; padding: 20px; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); box-shadow: 0 10px 35px rgba(30,20,12,.04); }
 .cash-summary-card > span { width: 43px; height: 43px; display: grid; flex: 0 0 auto; place-items: center; color: var(--orange-dark); border: 1px solid rgba(255,122,26,.22); border-radius: 12px; background: var(--orange-soft); }
 .cash-summary-card > div { min-width: 0; display: grid; gap: 8px; }
@@ -315,6 +315,27 @@ form { display: grid; gap: 18px; }
 .cash-history-scroll { margin-top: 12px; overflow-x: auto; }
 .cash-history-table { min-width: 790px; display: grid; gap: 7px; }
 .cash-history-row { min-height: 59px; display: grid; grid-template-columns: 120px 130px minmax(180px, 1fr) 100px 120px 38px; align-items: center; gap: 12px; padding: 9px 11px; color: var(--ink); border: 1px solid var(--border); border-radius: 11px; background: var(--surface-subtle); font-size: 11px; }
+.cash-toolbar { position: relative; z-index: 20; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.cash-toolbar .cash-filter-field { width: min(260px, 100%); }
+.cash-integrated-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(270px, .75fr); gap: 20px; align-items: start; }
+.cash-integrated-grid .cash-history-panel { min-height: 0; }
+.cash-history-row.cash-payment-row { grid-template-columns: 110px minmax(140px, 1fr) 120px minmax(150px, 1fr) 120px; }
+.cash-history-panel .cash-history-scroll .cash-history-table { min-width: 680px; }
+.cash-day + .cash-day { margin-top: 16px; }
+.cash-day-header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px; padding: 0 2px 8px; color: var(--muted); font-size: 12px; }
+.cash-day-header strong { color: var(--ink); font-size: 13px; text-transform: capitalize; }
+.cash-day-header b { color: var(--cash-positive); }
+.cash-estimated { color: var(--muted); font-size: 11px; }
+.cash-cost-list { display: grid; gap: 4px; margin: 18px 0 0; }
+.cash-cost-list > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 13px 2px; border-bottom: 1px solid var(--border); }
+.cash-cost-list dt { color: var(--muted); font-size: 12px; font-weight: 700; }
+.cash-cost-list dd { display: grid; justify-items: end; gap: 4px; margin: 0; }
+.cash-cost-list dd strong { color: var(--ink); font: 750 18px/1.1 'Manrope', sans-serif; }
+.cash-cost-list dd small { color: var(--muted); font-size: 11px; }
+.cash-cost-list > .cash-cost-total { border-bottom: 0; }
+.cash-cost-list > .cash-cost-total strong { color: var(--error-text); font-size: 22px; }
+.cash-cost-note { margin: 10px 2px 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+@media (max-width: 1200px) { .cash-integrated-grid { grid-template-columns: minmax(0, 1fr); } }
 .cash-history-head { min-height: 35px; color: var(--muted); border: 0; background: transparent; font-size: 9px; font-weight: 800; letter-spacing: .65px; text-transform: uppercase; }
 .cash-responsible-cell, .cash-description-cell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cash-responsible-cell { font-weight: 700; }
@@ -608,4 +629,8 @@ form { display: grid; gap: 18px; }
   .fw-expense-row { flex-wrap: wrap; }
   .fw-expense-row > .fw-actions { width: 100%; justify-content: end; }
   .fw-bar-label { flex-wrap: wrap; gap: 5px; }
+}
+@media (max-width: 430px) {
+  .cash-history-row.cash-payment-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cash-history-panel .cash-history-scroll .cash-history-table { min-width: 0; }
 }
