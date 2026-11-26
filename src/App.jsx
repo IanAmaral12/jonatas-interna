@@ -1415,14 +1415,11 @@ function CashFlowPage() {
     return true
   })
 
-  const totals = filteredEntries.reduce((result, entry) => {
-    if (entry.entry_type === 'entrada') result.income += entry.amount
-    if (entry.entry_type === 'saida') result.expenses += entry.amount
-    return result
-  }, { income: 0, expenses: 0 })
-  const cash = summarizeCashFlow(cashData, seller)
-  // Manual entries have no seller, so the balance always uses every received payment.
-  const balance = summarizeCashFlow(cashData, 'all').received + totals.income - totals.expenses
+  const manualInPeriod = entries.map((entry) => ({ ...entry, day: localDateValue(new Date(entry.created_at)) }))
+    .filter((entry) => entry.day >= appliedDateFilters.start && entry.day <= appliedDateFilters.end)
+  const cash = summarizeCashFlow(cashData, seller, manualInPeriod)
+  const balance = cash.totals.balance
+  const taxPending = (cashData?.tax_pending_months || []).map((month) => monthYearFormatter.format(dateFromValue(month)))
   const hasSecondaryFilters = Object.values(filters).some((value) => value !== 'all')
   const activeFilterCount = Object.values(filters).filter((value) => value !== 'all').length
 
@@ -1527,16 +1524,16 @@ function CashFlowPage() {
 
       <div className="cash-summary-grid">
         <article className="cash-summary-card income">
-          <span><CircleDollarSign size={20} /></span>
-          <div><small>Recebido de pedidos{seller !== 'all' ? ' · vendedor filtrado' : ''}</small><strong>{money(cash.received, 'BRL')}</strong></div>
-        </article>
-        <article className="cash-summary-card income">
           <span><ArrowUpRight size={20} /></span>
-          <div><small>Entradas manuais</small><strong>{money(totals.income, 'BRL')}</strong></div>
+          <div><small>Entradas · pedidos e manuais</small><strong>{money(cash.totals.received + cash.totals.manualIn, 'BRL')}</strong></div>
         </article>
         <article className="cash-summary-card expense">
           <span><ArrowDownLeft size={20} /></span>
-          <div><small>Saídas manuais</small><strong>{money(totals.expenses, 'BRL')}</strong></div>
+          <div><small>Saídas automáticas</small><strong>{money(cash.totals.automaticOut, 'BRL')}</strong></div>
+        </article>
+        <article className="cash-summary-card expense">
+          <span><ReceiptText size={20} /></span>
+          <div><small>Saídas manuais</small><strong>{money(cash.totals.manualOut, 'BRL')}</strong></div>
         </article>
         <article className={`cash-summary-card balance${balance < 0 ? ' negative' : ''}`}>
           <span><WalletCards size={20} /></span>
@@ -1545,12 +1542,48 @@ function CashFlowPage() {
       </div>
 
       {cashError && <div className="cash-flow-message error" role="alert">{cashError}{cashData ? ' Os valores exibidos são da última consulta concluída.' : ''}</div>}
+      {seller !== 'all' && <div className="cash-flow-message" role="status">Filtrando por vendedor: custos recorrentes, despesas gerais e lançamentos manuais ficam fora dos totais.</div>}
+      {taxPending.length > 0 && <div className="cash-flow-message" role="status">Imposto de {taxPending.join(', ')} ainda não lançado em Custos; as saídas desses meses não incluem imposto.</div>}
+
+      <article className="cash-history-panel cash-ledger-panel" aria-labelledby="cash-ledger-title">
+        <div className="cash-panel-heading"><div><span>Entradas e saídas automáticas</span><h2 id="cash-ledger-title">Saldo dia a dia</h2></div></div>
+        <div className="cash-history-scroll">
+          {cashLoading && !cashData ? (
+            <div className="cash-empty-state"><LoaderCircle className="spin" size={24} />Calculando o saldo diário...</div>
+          ) : cash.ledger.length === 0 ? (
+            <div className="cash-empty-state"><WalletCards size={30} /><strong>Nenhuma movimentação no período</strong><span>Ajuste o período ou o vendedor.</span></div>
+          ) : (
+            <div className="cash-ledger" role="table" aria-label="Saldo dia a dia">
+              <div className="cash-ledger-row cash-ledger-head" role="row"><span role="columnheader">Dia</span><span role="columnheader">Entradas</span><span role="columnheader">Saídas</span><span role="columnheader">Saldo do dia</span><span role="columnheader">Acumulado</span></div>
+              {cash.ledger.map((day) => (
+                <details className="cash-ledger-day" key={day.date}>
+                  <summary className="cash-ledger-row" role="row">
+                    <strong role="cell" data-label="Dia">{weekdayFormatter.format(dateFromValue(day.date))}, {day.date.split('-').reverse().join('/')}</strong>
+                    <span role="cell" data-label="Entradas" className="cash-value entrada">{money(day.inflow, 'BRL')}</span>
+                    <span role="cell" data-label="Saídas" className="cash-value saida">{money(day.outflow, 'BRL')}</span>
+                    <span role="cell" data-label="Saldo do dia" className={`cash-value ${day.net < 0 ? 'saida' : 'entrada'}`}>{money(day.net, 'BRL')}</span>
+                    <span role="cell" data-label="Acumulado" className={`cash-value ${day.cumulative < 0 ? 'saida' : 'entrada'}`}>{money(day.cumulative, 'BRL')}</span>
+                  </summary>
+                  <dl className="cash-ledger-items">
+                    {day.items.map((item) => (
+                      <div key={item.source}>
+                        <dt>{item.label}{item.source === 'shipping' && item.quantity ? ` · ${item.quantity} pedidos` : ''}{item.source === 'production' && item.quantity ? ` · ${item.quantity} unidades` : ''}</dt>
+                        <dd className={`cash-value ${item.source === 'payment' || item.source === 'manual_in' ? 'entrada' : 'saida'}`}>{item.source === 'payment' || item.source === 'manual_in' ? '+' : '−'} {money(item.amount, 'BRL')}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </details>
+              ))}
+            </div>
+          )}
+        </div>
+      </article>
 
       <div className="cash-integrated-grid">
         <article className="cash-history-panel" aria-labelledby="cash-payments-title">
           <div className="cash-panel-heading"><div><span>Recebimentos</span><h2 id="cash-payments-title">Pagamentos recebidos</h2></div></div>
           <div className="cash-results-summary">
-            <span>{cash.days.reduce((count, day) => count + day.payments.length, 0)} pagamentos · {money(cash.received, 'BRL')}</span>
+            <span>{cash.days.reduce((count, day) => count + day.payments.length, 0)} pagamentos · {money(cash.totals.received, 'BRL')}</span>
             <b>{periodLabel(appliedDateFilters)}</b>
           </div>
           <div className="cash-history-scroll">
@@ -1581,14 +1614,21 @@ function CashFlowPage() {
         </article>
 
         <article className="cash-history-panel cash-costs-panel" aria-labelledby="cash-costs-title">
-          <div className="cash-panel-heading"><div><span>Pedidos criados no período</span><h2 id="cash-costs-title">Custos gerados</h2></div></div>
+          <div className="cash-panel-heading"><div><span>Automáticas e manuais</span><h2 id="cash-costs-title">Saídas do período</h2></div></div>
           <dl className="cash-cost-list">
-            <div><dt>Fretes</dt><dd><strong>{money(cash.costs.shipping, 'BRL')}</strong><small>{cash.costs.freight_orders} pedidos × {money(cashData?.rates.shipping ?? 30, 'BRL')}</small></dd></div>
-            <div><dt>Potes</dt><dd><strong>{money(cash.costs.production, 'BRL')}</strong><small>{cash.costs.units} unidades × {money(cashData?.rates.production ?? 6.9, 'BRL')}</small></dd></div>
-            <div className="cash-cost-total"><dt>Total gerado</dt><dd><strong>{money(cash.costs.total, 'BRL')}</strong></dd></div>
+            {cash.outflows.length === 0 && <div><dt>Nenhuma saída no período</dt><dd /></div>}
+            {cash.outflows.map((item) => (
+              <div key={item.source}>
+                <dt>{item.label}</dt>
+                <dd><strong>{money(item.amount, 'BRL')}</strong>
+                  {item.source === 'shipping' && <small>{item.quantity} pedidos × {money(cashData?.rates.shipping ?? 30, 'BRL')}</small>}
+                  {item.source === 'production' && <small>{item.quantity} unidades × {money(cashData?.rates.production ?? 6.9, 'BRL')}</small>}
+                </dd>
+              </div>
+            ))}
+            <div className="cash-cost-total"><dt>Total de saídas</dt><dd><strong>{money(cash.totals.automaticOut + cash.totals.manualOut, 'BRL')}</strong></dd></div>
           </dl>
-          {cash.costs.missing_units > 0 && <p className="cash-cost-note">{cash.costs.missing_units} {cash.costs.missing_units === 1 ? 'pedido sem quantidade de potes não entrou' : 'pedidos sem quantidade de potes não entraram'} na conta.</p>}
-          <p className="cash-cost-note">Mesma regra do DRE: pedidos cancelados não geram custo e devolvidos não geram potes.</p>
+          <p className="cash-cost-note">Frete, potes, Skale e comissões sobre agendado ou por envio entram no dia da criação do pedido. Adquirência, comissões sobre pagamento e imposto entram no dia do pagamento. Imposto do mês é dividido entre os pedidos pagos do mês. Salários e recorrentes são divididos pelos dias do mês. Cancelados não geram custo e devolvidos não geram potes.</p>
         </article>
       </div>
 

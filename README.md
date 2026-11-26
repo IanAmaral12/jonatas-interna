@@ -168,9 +168,20 @@ O merge financeiro impede que replays antigos ou um `total_price` posterior subs
 O **Fluxo de caixa** é uma aba do Financeiro. A RPC `get_cash_flow(p_start, p_end)`
 (até 366 dias) lista os pagamentos recebidos pelo dia de pagamento (`orders.data_pagamento`;
 sem essa data, usa o horário de registro do valor recebido em Brasília e marca a data como
-estimada) e os custos de frete e potes gerados pelos pedidos criados no período, com as mesmas
-regras do DRE. Pagamentos e custos podem ser filtrados por vendedor; o saldo soma todos os
-pagamentos recebidos às entradas manuais e subtrai as saídas manuais.
+estimada) e devolve linhas diárias (`lines`) com todas as saídas automáticas, pelas regras do DRE:
+
+- frete, potes, Skale e comissões sobre agendado ou por envio entram no dia de criação do pedido;
+- adquirência, comissão externa, comissões sobre pagamento e imposto entram no dia do pagamento;
+- o imposto do mês é dividido igualmente entre os pedidos pagos criados no mês; meses sem imposto
+  lançado aparecem em `tax_pending_months`;
+- tráfego entra no dia do gasto em Brasília, com as mesmas exclusões de contas e campanhas do DRE;
+- salários do mês e custos recorrentes ativos são divididos pelos dias do mês;
+- despesas gerais entram na data lançada.
+
+A tela mostra o saldo dia a dia (entradas, saídas, saldo do dia e acumulado, com o detalhe por
+tipo), as saídas do período e os pagamentos detalhados. O filtro por vendedor considera apenas
+pagamentos e custos atribuídos ao vendedor; custos recorrentes, despesas gerais e lançamentos
+manuais ficam de fora nesse caso.
 
 A aba também permite que usuários autenticados cadastrem
 manualmente entradas e saídas em BRL. Cada lançamento registra responsável, valor,
