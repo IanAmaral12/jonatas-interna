@@ -1,11 +1,21 @@
 import { FinancialMetrics, PendingReasons } from './FinancialComponents'
-import { costFields, costLabel, formatMoney, hasFinancialPending } from '../lib/financialWorkspace'
+import { costFields, costLabel, costsByCategory, formatMoney, formatPercent, hasFinancialPending } from '../lib/financialWorkspace'
 
 export default function FinancialDashboardPage({ data, onConfigure }) {
   const summary = data.summary
+  const categories = costsByCategory(summary, data.expenses, data.recurring_costs)
+  const largest = categories[0]?.amount || 1
+  const totalCost = Number(summary.total_cost ?? summary.known_cost) || 0
   return <div className="fw-dashboard">
     <FinancialMetrics row={summary} dashboard />
     <PendingReasons row={summary} onConfigure={() => onConfigure(null)} />
+    <article className="fw-panel" aria-labelledby="fw-categories-title"><h2 id="fw-categories-title">Custos por setor</h2>
+      {!categories.length && <p className="fw-muted">Nenhum custo registrado neste mês.</p>}
+      <div className="fw-bars">{categories.map((category) => <div key={category.key}>
+        <div className="fw-bar-label"><span>{category.label}</span><strong>{formatMoney(category.amount)}{totalCost > 0 && <small> · {formatPercent(category.amount / totalCost * 100)}</small>}</strong></div>
+        <div className="fw-bar-track" role="meter" aria-label={category.label} aria-valuemin={0} aria-valuemax={largest} aria-valuenow={category.amount}><span className="cost" style={{ width: `${category.amount / largest * 100}%` }} /></div>
+      </div>)}</div>
+    </article>
       <article className="fw-panel"><h2>Composição dos custos</h2><dl className="fw-composition">
         {costFields.map(([key, label]) => <div key={key}><dt>{costLabel(summary, key, label)}</dt><dd>{formatMoney(summary[key])}</dd></div>)}
         <div><dt>Imposto não alocado</dt><dd>{formatMoney(summary.unallocated_tax)}</dd></div>

@@ -13,7 +13,7 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
     await db.exec(`create role anon; create role authenticated; create role service_role;
       create table public.sellers(id uuid primary key,name text,active boolean default true);
       create table public.orders(id text primary key,seller_id uuid references public.sellers(id),data timestamptz,
-        valor numeric,status_pagamento text,status_rastreio text,cancelado boolean default false,product_units integer);
+        valor numeric,status_pagamento text,status_rastreio text,cancelado boolean default false,product_units integer,codigo_rastreio text);
       create schema pgmq; create table pgmq.a_orders_ingest(msg_id bigint,enqueued_at timestamptz,message jsonb);
       create table public.meta_ad_accounts(id text primary key,account_id text);
       create table public.meta_campaigns(id text primary key,ad_account_id text,seller_id uuid);
@@ -36,6 +36,9 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
     const internalPayments = files.find(file => file.endsWith('_internal_payment_zero_fee.sql'))
     assert.ok(internalPayments, 'internal payment fee migration exists')
     await db.exec(await readFile(new URL(`../supabase/migrations/${internalPayments}`, import.meta.url), 'utf8'))
+    const costTypes = files.find(file => file.endsWith('_cost_types_categories_recurring.sql'))
+    assert.ok(costTypes, 'cost types migration exists')
+    await db.exec(await readFile(new URL(`../supabase/migrations/${costTypes}`, import.meta.url), 'utf8'))
     await db.exec(`insert into public.sellers values ('${ana}','Ana',true),('${bruno}','Bruno',false),('${carla}','Carla',true);
       insert into public.orders(id,seller_id,data,valor,status_pagamento,product_units)
         select 'a-'||n,'${ana}',case when n=10 then '2026-11-01 02:30+00'::timestamptz else '2026-10-15 12:00+00' end,
@@ -261,6 +264,47 @@ test('financial workspace reconciles receipts, known costs, taxes and access', a
       const row=(await workspace()).rows.find(r=>r.seller_id===bruno)
       assert.equal(row.pending.commission,0)
       assert.equal(row.total_cost,0.5)
+    })
+    await check('commission types use scheduled, received, paid count or shipped count bases',async()=>{
+      const commission=async(type,value)=>{
+        await db.exec(`update public.seller_financial_settings set commission_type='${type}',commission_pct=${value} where seller_id='${ana}'`)
+        const row=(await workspace()).rows[0]
+        assert.equal(row.commission_type,type)
+        return Number(row.commission_cost)
+      }
+      assert.equal(await commission('scheduled_pct',8),800)
+      assert.equal(await commission('paid_pct',10),300)
+      assert.equal(await commission('fixed_per_paid',150),300)
+      await db.exec("update public.orders set codigo_rastreio='BR1' where id in ('a-4','a-5','a-6','a-7'); update public.orders set cancelado=true where id='a-7'")
+      assert.equal(await commission('fixed_per_shipped',15),45)
+      const setting=(await workspace()).seller_settings.find(s=>s.seller_id===ana)
+      assert.equal(setting.commission_type,'fixed_per_shipped')
+      assert.equal(setting.month_commission_type,'fixed_per_shipped')
+    })
+    await check('commission type follows the latest effective month and validates its value',async()=>{
+      await db.exec(`insert into public.seller_financial_settings(seller_id,effective_month,commission_pct,commission_type) values ('${ana}','2026-11-01',20,'fixed_per_paid')`)
+      assert.equal((await workspace()).rows[0].commission_type,'scheduled_pct')
+      const november=(await workspace('2026-11-01')).seller_settings.find(s=>s.seller_id===ana)
+      assert.equal(november.commission_type,'fixed_per_paid'); assert.equal(november.commission_pct,20)
+      await assert.rejects(asRole('authenticated',()=>db.exec(`update public.seller_financial_settings set commission_pct=101 where seller_id='${ana}' and effective_month='2026-10-01'`)),/check constraint/i)
+      await assert.rejects(asRole('authenticated',()=>db.exec(`update public.seller_financial_settings set commission_type='other' where seller_id='${ana}'`)),/check constraint/i)
+    })
+    await check('recurring costs count in every active month with categories',async()=>{
+      await asRole('authenticated',()=>db.exec(`insert into public.financial_recurring_costs(description,amount,category,start_month,end_month) values
+        ('Aluguel',500,'estrutura','2026-09-01',null),('Ferramenta',100,'ferramentas','2026-11-01',null),('Antigo',70,'servicos','2026-08-01','2026-09-01');
+        insert into public.financial_cost_entries(description,amount,cost_date,category) values ('Agência',60,'2026-10-20','marketing')`))
+      let result=await workspace()
+      assert.equal(Number(result.summary.general_expenses),600)
+      assert.equal(Number(result.summary.total_cost),3334)
+      assert.deepEqual(result.recurring_costs.map(c=>[c.description,c.category]),[['Aluguel','estrutura']])
+      assert.deepEqual(result.expenses.map(e=>e.category),['outros','marketing'])
+      result=await workspace('2026-11-01')
+      assert.deepEqual(result.recurring_costs.map(c=>c.description),['Aluguel','Ferramenta'])
+      assert.equal(Number(result.summary.general_expenses),600)
+      for(const values of ["('X',1,'invalida','2026-10-01',null)","('X',1,'outros','2026-10-02',null)","('X',1,'outros','2026-10-01','2026-09-01')","('X',0,'outros','2026-10-01',null)"])
+        await assert.rejects(asRole('authenticated',()=>db.exec(`insert into public.financial_recurring_costs(description,amount,category,start_month,end_month) values ${values}`)),/check constraint/i)
+      await assert.rejects(asRole('authenticated',()=>db.exec("insert into public.financial_cost_entries(description,amount,cost_date,category) values ('X',1,'2026-10-01','invalida')")),/check constraint/i)
+      await assert.rejects(asRole('anon',()=>db.query('select * from public.financial_recurring_costs')),/permission denied/i)
     })
     await check('authenticated CRUD is validated and anonymous cannot read or execute',async()=>{
       for(const amount of [-1,1.234,'NaN','Infinity',1000000000000]) {

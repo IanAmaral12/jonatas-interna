@@ -1,5 +1,5 @@
 import { calculateBreakEvenBars } from '../lib/financialDreBars'
-import { costFields, costLabel, formatMoney, formatPercent, hasFinancialPending } from '../lib/financialWorkspace'
+import { costFields, costLabel, formatCommission, formatMoney, formatPercent, hasFinancialPending } from '../lib/financialWorkspace'
 
 const pendingLabels = {
   salary: ['vendedor sem salário lançado', 'vendedores sem salário lançado'], commission: ['vendedor sem comissão configurada', 'vendedores sem comissão configurada'],
@@ -47,7 +47,7 @@ export function FinancialBars({ row }) {
 
 export function CostDetails({ row }) {
   return <details className="fw-details"><summary>Composição dos custos</summary><dl>
-    {costFields.map(([key, label]) => <div key={key}><dt>{costLabel(row, key, label)}{key === 'commission_cost' ? ` (${formatPercent(row.commission_pct)})` : ''}</dt><dd>{formatMoney(row[key])}</dd></div>)}
+    {costFields.map(([key, label]) => <div key={key}><dt>{costLabel(row, key, label)}{key === 'commission_cost' ? ` (${formatCommission(row.commission_type, row.commission_pct)})` : ''}</dt><dd>{formatMoney(row[key])}</dd></div>)}
     <div className="fw-total"><dt>{hasFinancialPending(row) ? 'Total de custos conhecidos' : 'Custo total'}</dt><dd>{formatMoney(row.total_cost ?? row.known_cost)}</dd></div>
   </dl></details>
 }

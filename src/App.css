@@ -481,8 +481,8 @@ form { display: grid; gap: 18px; }
 .fw-page h3 { margin: 0; font: 750 17px/1.35 'Manrope', sans-serif; }
 .fw-page p { line-height: 1.55; }
 .fw-page label { display: grid; align-content: start; gap: 8px; font-size: 12px; font-weight: 700; }
-.fw-page input { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; color: var(--ink); border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); }
-.fw-page :is(input, button, summary):focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
+.fw-page :is(input, select) { width: 100%; min-width: 0; min-height: 44px; padding: 10px 12px; color: var(--ink); border: 1px solid var(--border-strong); border-radius: 9px; background: var(--surface); }
+.fw-page :is(input, select, button, summary):focus-visible { outline: 3px solid var(--orange); outline-offset: 3px; }
 .fw-page small { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.5; }
 .fw-header { align-items: end; margin-bottom: 23px; }
 .fw-header-controls { display: flex; flex-shrink: 0; align-items: end; gap: 10px; }

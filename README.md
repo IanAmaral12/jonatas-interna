@@ -149,6 +149,12 @@ Dashboard e ranking identificam esses resultados como parciais e mantêm os aler
 
 Na plataforma `Pagamento Interno`, taxa de pagamento ausente é considerada R$ 0 no cálculo financeiro e não gera alerta de taxa pendente. A regra usa a plataforma vigente do retrato financeiro, vale para pedidos históricos e futuros e preserva os dados de origem. Taxas explícitas continuam contabilizadas, inclusive em pedidos mistos com pagamentos por outros gateways. A cobrança de R$ 0,50 da Skale e alertas de outros dados ausentes permanecem independentes.
 
+### Comissões, setores e custos recorrentes
+
+Cada vendedor tem um tipo de comissão vigente a partir do mês informado em `seller_financial_settings.commission_type`: percentual do faturamento agendado não cancelado (`scheduled_pct`, padrão histórico), percentual do valor recebido (`paid_pct`), valor fixo por venda paga (`fixed_per_paid`) ou valor fixo por pedido enviado (`fixed_per_shipped`, pedido com código de rastreio e não cancelado). O valor fica em `commission_pct`: percentual nos tipos `*_pct` e R$ por pedido nos tipos `fixed_*`.
+
+Despesas gerais e custos recorrentes possuem um setor (`category`). `financial_recurring_costs` guarda custos mensais com `start_month` e `end_month` opcional; cada custo ativo soma às despesas gerais do consolidado em todos os meses do intervalo. O dashboard financeiro agrupa custos automáticos e lançados por setor.
+
 ### Reconciliação de pagamentos da Skale
 
 Os webhooks não cobrem necessariamente pagamentos manuais e cobranças divididas antigas. Quando a Skale confirma um recebimento que não consta do webhook, consulte `get_pedido_por_id` e `get_pagamentos_do_pedido` no escopo interno. O parser `scripts/skale-payment-evidence.js` valida o pedido, a quantidade de cobranças e a igualdade entre a soma das parcelas pagas, o total confirmado e o valor pago do pedido; descarta dados pessoais da resposta.

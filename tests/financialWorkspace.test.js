@@ -1,6 +1,30 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { sortSellerRanking, sellerSettingChanges } from '../src/lib/financialWorkspace.js'
+import { costsByCategory, formatCommission, sortSellerRanking, sellerSettingChanges } from '../src/lib/financialWorkspace.js'
+
+test('commission types change the value limit and are saved with their value', () => {
+  const setting = { monthly_salary: 0, commission_pct: '8.00', commission_type: 'scheduled_pct' }
+  assert.deepEqual(sellerSettingChanges(setting, { salary: '', commission: '150', commissionType: 'fixed_per_paid' }), { commission_pct: 150, commission_type: 'fixed_per_paid' })
+  assert.deepEqual(sellerSettingChanges(setting, { salary: '', commission: '8', commissionType: 'paid_pct' }), { commission_pct: 8, commission_type: 'paid_pct' })
+  assert.deepEqual(sellerSettingChanges(setting, { salary: '', commission: '8', commissionType: 'scheduled_pct' }), {})
+  assert.throws(() => sellerSettingChanges(setting, { salary: '', commission: '150', commissionType: 'paid_pct' }), /comissão/i)
+  assert.throws(() => sellerSettingChanges(setting, { salary: '', commission: '', commissionType: 'fixed_per_shipped' }), /comissão/i)
+  assert.equal(formatCommission('fixed_per_shipped', 15).replace(/\s/g, ' '), 'R$ 15,00 por pedido enviado')
+  assert.equal(formatCommission('paid_pct', 2), '2% do valor recebido')
+  assert.equal(formatCommission(null, null), 'não configurada')
+})
+
+test('costs by category join automatic, general and recurring costs sorted by amount', () => {
+  const summary = { salary_cost: 1000, commission_cost: 200, production_cost: 69, shipping_cost: 300, traffic_cost: 500,
+    skale_cost: 5, payment_fee_cost: 30, external_commission_cost: 20, allocated_tax: 10, unallocated_tax: 5 }
+  const result = costsByCategory(summary, [{ category: 'marketing', amount: '60' }, { category: 'outros', amount: 40 }],
+    [{ category: 'estrutura', amount: 500 }])
+  assert.deepEqual(result.map(({ key, amount }) => [key, amount]), [
+    ['pessoal', 1200], ['marketing', 580], ['estrutura', 500], ['logistica', 300], ['producao', 69],
+    ['outros', 40], ['financeiro', 35], ['impostos', 15],
+  ])
+  assert.equal(result[0].label, 'Pessoal')
+})
 
 test('ranking orders known profits including incomplete sellers without mutating rows', () => {
   const rows = Object.freeze([
